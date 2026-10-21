@@ -7,19 +7,34 @@ function residentManagement(string $method): void {
     if ($method==='POST') {
         verifyCsrf();
         $facility=filter_var($_POST['facility_id']??null,FILTER_VALIDATE_INT);
-        $code=trim((string)($_POST['reference_code']??''));
         $name=trim((string)($_POST['display_name']??''));
-        if (!$facility || $facility<1 || $code==='' || strlen($code)>60 || $name==='' || strlen($name)>160) {
+        if (!$facility || $facility<1 || $name==='' || strlen($name)>160) {
             http_response_code(422); exit('Invalid resident information');
         }
         $check=db()->prepare('SELECT id FROM facilities WHERE id=? AND active=1');
         $check->bind_param('i',$facility); $check->execute();
         if (!$check->get_result()->fetch_row()) { http_response_code(422); exit('Facility is not active'); }
+        // Generate a collision-resistant temporary value, then derive a stable
+        // reference from the database-assigned resident ID.
+        $database=db();
+        $database->begin_transaction();
         try {
-            $stmt=db()->prepare('INSERT INTO residents(facility_id,reference_code,display_name) VALUES(?,?,?)');
-            $stmt->bind_param('iss',$facility,$code,$name); $stmt->execute();
-        } catch (mysqli_sql_exception $e) {
-            if ((int)$e->getCode()===1062) { http_response_code(422); exit('Reference code already exists in this facility'); }
+            $code='TMP-'.bin2hex(random_bytes(16));
+            $stmt=$database->prepare('INSERT INTO residents(facility_id,reference_code,display_name) VALUES(?,?,?)');
+            $stmt->bind_param('iss',$facility,$code,$name);
+            $stmt->execute();
+            $residentId=$database->insert_id;
+            $code='RES-'.str_pad((string)$residentId,6,'0',STR_PAD_LEFT);
+            $stmt=$database->prepare('UPDATE residents SET reference_code=? WHERE id=?');
+            $stmt->bind_param('si',$code,$residentId);
+            $stmt->execute();
+            $database->commit();
+        } catch (Throwable $e) {
+            $database->rollback();
+            if ($e instanceof mysqli_sql_exception && (int)$e->getCode()===1062) {
+                http_response_code(409);
+                exit('A reference code conflict occurred. Please contact an administrator.');
+            }
             throw $e;
         }
         header('Location: /admin/residents',true,303); exit;
@@ -31,7 +46,7 @@ function residentManagement(string $method): void {
     $html.='</table><h2>Register resident</h2><form method="post"><input type="hidden" name="_csrf" value="'.csrf().'"><label>Facility<select name="facility_id" required><option value="">Select facility</option>';
     $facilities=db()->query('SELECT id,name FROM facilities WHERE active=1 ORDER BY name');
     while ($f=$facilities->fetch_assoc()) $html.='<option value="'.(int)$f['id'].'">'.escape($f['name']).'</option>';
-    $html.='</select></label><label>Reference code<input name="reference_code" maxlength="60" required></label><label>Display name<input name="display_name" maxlength="160" required></label><button>Register resident</button></form>';
+    $html.='</select></label><p>The reference code is generated automatically when you register the resident.</p><label>Display name<input name="display_name" maxlength="160" required></label><button>Register resident</button></form>';
     view('Residents',$html);
 }
 
