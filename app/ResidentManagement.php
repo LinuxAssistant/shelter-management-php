@@ -87,13 +87,19 @@ function occupancyManagement(string $method): void {
         } elseif ($action==='checkout') {
             $stay=filter_var($_POST['stay_id']??null,FILTER_VALIDATE_INT);
             if (!$stay || $stay<1) { http_response_code(422); exit('Invalid stay'); }
+            $departureType=(string)($_POST['departure_type']??'');
+            $reason=trim((string)($_POST['departure_reason']??''));
+            if (!in_array($departureType,['voluntary','staff_exit'],true) || strlen($reason)>500 || ($departureType==='staff_exit' && $reason==='')) {
+                http_response_code(422); exit('Select a valid departure type. Staff-directed exits require a reason (maximum 500 characters).');
+            }
+            $staffId=(int)$_SESSION['user_id'];
             $db->begin_transaction();
             try {
                 $stmt=$db->prepare('SELECT id FROM stays WHERE id=? AND checked_out_at IS NULL FOR UPDATE');
                 $stmt->bind_param('i',$stay); $stmt->execute();
                 if (!$stmt->get_result()->fetch_row()) throw new DomainException('Stay is already closed or does not exist.');
-                $stmt=$db->prepare('UPDATE stays SET checked_out_at=NOW() WHERE id=? AND checked_out_at IS NULL');
-                $stmt->bind_param('i',$stay); $stmt->execute();
+                $stmt=$db->prepare('UPDATE stays SET checked_out_at=NOW(),departure_type=?,departure_reason=?,departed_by=? WHERE id=? AND checked_out_at IS NULL');
+                $stmt->bind_param('ssii',$departureType,$reason,$staffId,$stay); $stmt->execute();
                 $db->commit();
             } catch (Throwable $e) {
                 $db->rollback();
@@ -107,7 +113,7 @@ function occupancyManagement(string $method): void {
     $html='<p><a href="/admin/residents">Register residents</a></p><h2>Current occupancy</h2><table><tr><th>Facility</th><th>Resident</th><th>Room</th><th>Bed</th><th>Checked in</th><th>Action</th></tr>';
     $rows=db()->query('SELECT s.id,s.checked_in_at,r.display_name,f.name AS facility_name,rm.name AS room_name,b.code,b.position FROM stays s JOIN residents r ON r.id=s.resident_id JOIN beds b ON b.id=s.bed_id JOIN rooms rm ON rm.id=b.room_id JOIN facilities f ON f.id=rm.facility_id WHERE s.checked_out_at IS NULL ORDER BY f.name,rm.name,b.code,b.position');
     while ($r=$rows->fetch_assoc()) {
-        $html.='<tr><td>'.escape($r['facility_name']).'</td><td>'.escape($r['display_name']).'</td><td>'.escape($r['room_name']).'</td><td>'.escape($r['code'].' ('.$r['position'].')').'</td><td>'.escape($r['checked_in_at']).'</td><td><form method="post"><input type="hidden" name="_csrf" value="'.csrf().'"><input type="hidden" name="action" value="checkout"><input type="hidden" name="stay_id" value="'.(int)$r['id'].'"><button>Check out</button></form></td></tr>';
+        $html.='<tr><td>'.escape($r['facility_name']).'</td><td>'.escape($r['display_name']).'</td><td>'.escape($r['room_name']).'</td><td>'.escape($r['code'].' ('.$r['position'].')').'</td><td>'.escape($r['checked_in_at']).'</td><td><form method="post"><input type="hidden" name="_csrf" value="'.csrf().'"><input type="hidden" name="action" value="checkout"><input type="hidden" name="stay_id" value="'.(int)$r['id'].'"><label>Departure type<select name="departure_type" required><option value="voluntary">Voluntary departure</option><option value="staff_exit">Staff-directed exit</option></select></label><label>Reason (required for staff exit)<input name="departure_reason" maxlength="500"></label><button>Close stay</button></form></td></tr>';
     }
     $html.='</table><h2>Check in resident</h2><form method="post"><input type="hidden" name="_csrf" value="'.csrf().'"><input type="hidden" name="action" value="checkin"><label>Search by resident name or reference code<input type="search" id="resident-search" placeholder="Search residents"></label><label>Resident<select name="resident_id" id="occupancy-resident" required><option value="">Select resident</option>';
     $residents=db()->query('SELECT r.id,r.facility_id,r.display_name,r.reference_code,f.name AS facility_name FROM residents r JOIN facilities f ON f.id=r.facility_id WHERE f.active=1 AND NOT EXISTS(SELECT 1 FROM stays s WHERE s.resident_id=r.id AND s.checked_out_at IS NULL) ORDER BY f.name,r.display_name');
