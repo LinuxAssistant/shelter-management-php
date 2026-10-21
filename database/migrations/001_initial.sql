@@ -1,0 +1,11 @@
+CREATE TABLE users (id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,email VARCHAR(255) NOT NULL UNIQUE,badge_number VARCHAR(64) NOT NULL UNIQUE,password_hash VARCHAR(255) NOT NULL,active BOOLEAN NOT NULL DEFAULT TRUE,created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP);
+CREATE TABLE roles (id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,name VARCHAR(80) NOT NULL UNIQUE);
+CREATE TABLE permissions (id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,name VARCHAR(100) NOT NULL UNIQUE);
+CREATE TABLE user_roles (user_id BIGINT UNSIGNED NOT NULL,role_id INT UNSIGNED NOT NULL,PRIMARY KEY(user_id,role_id),FOREIGN KEY(user_id) REFERENCES users(id),FOREIGN KEY(role_id) REFERENCES roles(id));
+CREATE TABLE role_permissions (role_id INT UNSIGNED NOT NULL,permission_id INT UNSIGNED NOT NULL,PRIMARY KEY(role_id,permission_id),FOREIGN KEY(role_id) REFERENCES roles(id),FOREIGN KEY(permission_id) REFERENCES permissions(id));
+CREATE TABLE incidents (id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,category VARCHAR(60) NOT NULL,severity VARCHAR(20) NOT NULL,location VARCHAR(150) NOT NULL,description TEXT NOT NULL,status VARCHAR(20) NOT NULL DEFAULT 'Open',reported_by BIGINT UNSIGNED NOT NULL,occurred_at DATETIME NOT NULL,created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,FOREIGN KEY(reported_by) REFERENCES users(id));
+INSERT INTO roles(name) VALUES('Administrator'),('Manager'),('Staff'),('Volunteer');
+INSERT INTO permissions(name) VALUES('incidents.view'),('incidents.create'),('incidents.review'),('admin.manage');
+INSERT INTO role_permissions(role_id,permission_id) SELECT r.id,p.id FROM roles r CROSS JOIN permissions p WHERE r.name='Administrator';
+INSERT INTO role_permissions(role_id,permission_id) SELECT r.id,p.id FROM roles r CROSS JOIN permissions p WHERE r.name='Manager' AND p.name IN ('incidents.view','incidents.create','incidents.review');
+INSERT INTO role_permissions(role_id,permission_id) SELECT r.id,p.id FROM roles r CROSS JOIN permissions p WHERE r.name='Staff' AND p.name IN ('incidents.view','incidents.create');
