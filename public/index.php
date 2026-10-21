@@ -2,6 +2,7 @@
 declare(strict_types=1);
 require dirname(__DIR__) . '/bootstrap/app.php';
 require dirname(__DIR__) . '/app/EmployeeManagement.php';
+require dirname(__DIR__) . '/app/PasswordManagement.php';
 $path = parse_url($_SERVER['REQUEST_URI'] ?? '/', PHP_URL_PATH);
 $method = $_SERVER['REQUEST_METHOD'] ?? 'GET';
 if ($path === '/login' && $method === 'GET') {
@@ -16,7 +17,11 @@ if ($path === '/login' && $method === 'GET') {
 } elseif ($path === '/logout' && $method === 'POST') {
     requireAuth(); verifyCsrf(); $_SESSION=[]; session_destroy(); header('Location: /login'); exit;
 } elseif ($path === '/' && $method === 'GET') {
-    requireAuth(); view('Staff dashboard','<p>Welcome to Shelter Management.</p><p><a href="/incidents">View incident reports</a></p>'.(can('admin.manage')?'<p><a href="/admin/employees">Manage employees</a></p>':''));
+    requireAuth(); view('Staff dashboard','<p>Welcome to Shelter Management.</p><p><a href="/incidents">View incident reports</a></p><p><a href="/account/password">Change my password</a></p>'.(can('admin.manage')?'<p><a href="/admin/employees">Manage employees</a></p>':''));
+} elseif ($path === '/account/password' && $method === 'GET') {
+    passwordChangeForm();
+} elseif ($path === '/account/password' && $method === 'POST') {
+    passwordChangeSave();
 } elseif ($path === '/incidents' && $method === 'GET') {
     requirePermission('incidents.view'); $rows=db()->query('SELECT id,category,severity,status,occurred_at FROM incidents ORDER BY occurred_at DESC LIMIT 100'); $html='<p><a href="/incidents/new">New incident</a></p><table><tr><th>ID</th><th>Category</th><th>Severity</th><th>Status</th><th>When</th></tr>';
     while($row=$rows->fetch_assoc()) $html.='<tr><td><a href="/incidents/'.(int)$row['id'].'">#'.(int)$row['id'].'</a></td><td>'.escape($row['category']).'</td><td>'.escape($row['severity']).'</td><td>'.escape($row['status']).'</td><td>'.escape($row['occurred_at']).'</td></tr>';
