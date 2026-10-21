@@ -59,6 +59,14 @@ function platformAdmin(string $resource,string $method): void {
                 http_response_code(422); exit('This bed code is already used by a different bed type.');
             }
         }
+        if ($resource==='facilities' && isset($_POST['edit_facility_id'])) {
+            $id=filter_var($_POST['edit_facility_id'],FILTER_VALIDATE_INT);
+            if (!$id || $id<1) { http_response_code(422); exit('Invalid facility'); }
+            $stmt=db()->prepare('UPDATE facilities SET name=?,timezone=?,address=? WHERE id=?');
+            $stmt->bind_param('sssi',$values[0],$values[1],$values[2],$id);
+            $stmt->execute();
+            header('Location: /admin/platform/facilities',true,303); exit;
+        }
         $columns=implode(',',array_keys($fields));
         $placeholders=implode(',',array_fill(0,count($values),'?'));
         $stmt=db()->prepare("INSERT INTO `$table` ($columns) VALUES ($placeholders)");
@@ -92,7 +100,21 @@ function platformAdmin(string $resource,string $method): void {
         }
         $html.='</tr>';
     }
-    $html.='</tbody></table><h2>Add '.escape(ucfirst($resource)).'</h2><form method="post"><input type="hidden" name="_csrf" value="'.csrf().'">';
+    $html.='</tbody></table>';
+    if ($resource==='facilities') {
+        $html.='<h2>Edit facility</h2><form method="post"><input type="hidden" name="_csrf" value="'.csrf().'"><label>Facility<select name="edit_facility_id" id="edit-facility" required>';
+        $facilities=db()->query('SELECT id,name,timezone,address FROM facilities ORDER BY name,id');
+        $facilityOptions=[];
+        while ($f=$facilities->fetch_assoc()) {
+            $facilityOptions[]=$f;
+            $html.='<option value="'.(int)$f['id'].'">'.escape($f['name']).' (#'.(int)$f['id'].')</option>';
+        }
+        $html.='</select></label><label>Name<input name="name" id="facility-name" maxlength="160" required></label><label>Timezone<select name="timezone" id="facility-timezone" required>';
+        foreach (DateTimeZone::listIdentifiers() as $zone) $html.='<option value="'.escape($zone).'">'.escape($zone).'</option>';
+        $html.='</select></label><label>Address<input name="address" id="facility-address" maxlength="255" required></label><button>Save changes</button></form>';
+        $html.='<script>const facilityData='.json_encode($facilityOptions,JSON_HEX_TAG|JSON_HEX_AMP|JSON_HEX_APOS|JSON_HEX_QUOT).';const facilitySelect=document.getElementById("edit-facility");function loadFacility(){const f=facilityData.find(x=>String(x.id)===facilitySelect.value);if(!f)return;document.getElementById("facility-name").value=f.name;document.getElementById("facility-timezone").value=f.timezone;document.getElementById("facility-address").value=f.address;}facilitySelect.addEventListener("change",loadFacility);loadFacility();</script>';
+    }
+    $html.='<h2>Add '.escape(ucfirst($resource)).'</h2><form method="post"><input type="hidden" name="_csrf" value="'.csrf().'">';
     foreach ($fields as $field=>$type) {
         $label=escape($field==='room_id'?'Room':ucwords(str_replace('_',' ',$field)));
         $optional=str_starts_with($type,'optional-');
