@@ -42,10 +42,10 @@ if ($path === '/login' && $method === 'GET') {
     while ($person=$people->fetch_assoc()) $html.='<li>'.escape($person['display_name']).' — '.escape($person['person_type']).' ('.escape($person['involvement']).')</li>';
     $html.='</ul>';
     if (can('incidents.people')) $html.='<form method="post" action="/incidents/'.$id.'/people"><input type="hidden" name="_csrf" value="'.csrf().'"><label>Name or identifier <input name="display_name" maxlength="150" required></label><label>Person type <select name="person_type"><option>Resident</option><option>Employee</option><option>Visitor</option><option>Unknown</option></select></label><label>Involvement <select name="involvement"><option>Witness</option><option>Affected</option><option>Reported</option><option>Other</option></select></label><button>Add person</button></form>';
-    $stmt=db()->prepare('SELECT n.*,u.email AS author FROM incident_notes n JOIN users u ON u.id=n.author_id WHERE n.incident_id=? ORDER BY n.created_at,n.id');
+    $stmt=db()->prepare('SELECT n.*,u.email AS author,u.first_name,u.last_name,u.job_title,u.badge_number FROM incident_notes n JOIN users u ON u.id=n.author_id WHERE n.incident_id=? ORDER BY n.created_at,n.id');
     $stmt->bind_param('i',$id); $stmt->execute(); $notes=$stmt->get_result();
     $html.='<h2>Employee notes</h2>';
-    while ($note=$notes->fetch_assoc()) $html.='<article><p>'.nl2br(escape($note['body'])).'</p><small>'.escape($note['author']).' · '.escape($note['created_at']).'</small></article><hr>';
+    while ($note=$notes->fetch_assoc()) { $fullName=trim(($note['first_name'] ?? '').' '.($note['last_name'] ?? '')); $display=$fullName!==''?$fullName:$note['author']; $job=trim((string)($note['job_title'] ?? '')); $html.='<article><p>'.nl2br(escape($note['body'])).'</p><small>'.escape($display).($job!==''?' · '.escape($job):'').' · '.escape($note['created_at']).'</small></article><hr>'; }
     if (can('incidents.note')) $html.='<form method="post" action="/incidents/'.$id.'/notes"><input type="hidden" name="_csrf" value="'.csrf().'"><label>Add a note <textarea name="body" maxlength="10000" required></textarea></label><button>Save note</button></form>';
     view('Incident #'.$id,$html);
 } elseif (preg_match('~^/incidents/([1-9][0-9]*)/(notes|people)$~D', (string)$path, $matches) && $method === 'POST') {
