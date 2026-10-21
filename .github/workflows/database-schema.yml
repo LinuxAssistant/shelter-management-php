@@ -38,5 +38,5 @@ jobs:
             SELECT audience FROM kitchen_meals LIMIT 0;
             SELECT id FROM daytime_access_exceptions LIMIT 0;
             SELECT id FROM daytime_food_distributions LIMIT 0;
-            SELECT id FROM facility_schedules LIMIT 0;
+            SELECT facility_id FROM facility_schedules LIMIT 0;
           "
