@@ -21,7 +21,18 @@ function db(): mysqli {
 }
 function escape(string $value): string { return htmlspecialchars($value, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8'); }
 function csrf(): string { return $_SESSION['csrf'] ??= bin2hex(random_bytes(32)); }
-function requireAuth(): void { if (empty($_SESSION['user_id'])) { header('Location: /login'); exit; } }
+function requireAuth(): void {
+    if (empty($_SESSION['user_id'])) { header('Location: /login'); exit; }
+    $id=(int)$_SESSION['user_id'];
+    $stmt=db()->prepare('SELECT active FROM users WHERE id=? LIMIT 1');
+    $stmt->bind_param('i',$id); $stmt->execute();
+    $user=$stmt->get_result()->fetch_assoc();
+    if (!$user || !(int)$user['active']) {
+        $_SESSION=[];
+        session_regenerate_id(true);
+        header('Location: /login'); exit;
+    }
+}
 function can(string $permission): bool {
     if (empty($_SESSION['user_id'])) return false;
     $stmt=db()->prepare('SELECT 1 FROM user_roles ur JOIN role_permissions rp ON rp.role_id=ur.role_id JOIN permissions p ON p.id=rp.permission_id WHERE ur.user_id=? AND p.name=? LIMIT 1');
