@@ -251,3 +251,11 @@ CREATE TABLE daytime_food_distributions (
  FOREIGN KEY (recorded_by) REFERENCES users(id),
  INDEX idx_daytime_food_facility (facility_id,served_at)
 );
+
+-- ===== 015_stay_departures.sql =====
+-- Record how each stay ended, including staff-directed exits.
+ALTER TABLE stays
+ ADD COLUMN departure_type ENUM('voluntary','staff_exit') NULL,
+ ADD COLUMN departure_reason VARCHAR(500) NULL,
+ ADD COLUMN departed_by INT UNSIGNED NULL,
+ ADD CONSTRAINT fk_stays_departed_by FOREIGN KEY (departed_by) REFERENCES users(id);
