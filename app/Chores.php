@@ -52,6 +52,24 @@ function choresPage(string $method): void {
     $html.='</table><h2>New chore</h2><form method="post"><input type="hidden" name="_csrf" value="'.csrf().'"><label>Facility<select name="facility_id" required>';
     $facilities=db()->query('SELECT id,name FROM facilities WHERE active=1 ORDER BY name');
     while ($f=$facilities->fetch_assoc()) $html.='<option value="'.(int)$f['id'].'">'.escape($f['name']).'</option>';
-    $html.='</select></label><label>Chore<input name="title" maxlength="160" required></label><label>Area<input name="area" maxlength="100"></label><label>Instructions<textarea name="description" maxlength="10000"></textarea></label><label>Due<input type="datetime-local" name="due_at" required></label><label>Repeat<select name="recurrence"><option value="none">None</option><option value="daily">Daily</option><option value="weekly">Weekly</option></select></label><label>Assigned to<select name="assignee_type"><option value="unassigned">Unassigned</option><option value="resident">Resident</option></select></label><label>Assignee ID (leave blank if unassigned)<input type="number" min="1" name="assignee_id"></label><button>Create chore</button></form>';
+    $html.='</select></label><label>Chore<input name="title" maxlength="160" required></label><label>Area<input name="area" maxlength="100"></label><label>Instructions<textarea name="description" maxlength="10000"></textarea></label><label>Due<input type="datetime-local" name="due_at" required></label><label>Repeat<select name="recurrence"><option value="none">None</option><option value="daily">Daily</option><option value="weekly">Weekly</option></select></label><label>Assigned to<select name="assignee_type"><option value="unassigned">Unassigned</option><option value="resident">Resident</option></select></label><label>Resident<select name="assignee_id" id="chore-resident"><option value="">Unassigned</option>';
+    $residents=db()->query('SELECT r.id,r.facility_id,r.display_name,r.reference_code,f.name AS facility_name FROM residents r JOIN facilities f ON f.id=r.facility_id WHERE f.active=1 ORDER BY f.name,r.display_name,r.id');
+    while ($resident=$residents->fetch_assoc()) $html.='<option value="'.(int)$resident['id'].'" data-facility="'.(int)$resident['facility_id'].'">'.escape($resident['facility_name'].' — '.$resident['display_name'].' ('.$resident['reference_code'].')').'</option>';
+    $html.='</select></label><button>Create chore</button></form><script>
+    const choreFacility=document.querySelector("form select[name=facility_id]");
+    const choreResident=document.getElementById("chore-resident");
+    const choreAssigneeType=document.querySelector("form select[name=assignee_type]");
+    function filterChoreResidents() {
+        for (const option of choreResident.options) {
+            if (!option.value) continue;
+            option.hidden=option.dataset.facility!==choreFacility.value;
+            option.disabled=option.hidden;
+        }
+        if (choreResident.selectedOptions[0]?.disabled) choreResident.value="";
+    }
+    choreFacility.addEventListener("change",filterChoreResidents);
+    choreAssigneeType.addEventListener("change",()=>{choreResident.disabled=choreAssigneeType.value!=="resident";if(choreResident.disabled)choreResident.value="";});
+    filterChoreResidents();choreResident.disabled=true;
+    </script>';
     view('Chores',$html);
 }
