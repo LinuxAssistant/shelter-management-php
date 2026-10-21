@@ -8,7 +8,7 @@ function platformResources(): array {
         'rooms'=>['table'=>'rooms','fields'=>['facility_id'=>'number','name'=>'text']],
         'beds'=>['table'=>'beds','fields'=>['room_id'=>'number','code'=>'text','bed_type'=>'select:single,bunk','position'=>'select:single,lower,upper']],
         'volunteers'=>['table'=>'volunteers','fields'=>['facility_id'=>'number','display_name'=>'text']],
-        'donations'=>['table'=>'donations','fields'=>['facility_id'=>'number','donor_label'=>'text','kind'=>'select:cash,in_kind','amount'=>'decimal','description'=>'text','received_at'=>'datetime-local']],
+        'donations'=>['table'=>'donations','fields'=>['facility_id'=>'number','donor_label'=>'text','kind'=>'select:cash,in_kind','amount'=>'optional-decimal','description'=>'optional-text','received_at'=>'datetime-local','item_category'=>'optional-select:bedding,clothing,toiletries,food,household,misc','quantity'=>'optional-decimal','unit'=>'optional-text','estimated_value'=>'optional-decimal']],
         'expenses'=>['table'=>'expenses','fields'=>['facility_id'=>'number','description'=>'text','amount'=>'decimal','spent_at'=>'datetime-local']]
     ];
 }
@@ -21,16 +21,23 @@ function platformAdmin(string $resource,string $method): void {
         verifyCsrf(); $values=[];
         foreach ($fields as $name=>$type) {
             $value=trim((string)($_POST[$name]??''));
-            if ($value==='' || strlen($value)>255) { http_response_code(422); exit('Missing or invalid field'); }
-            if ($type==='number' && (!ctype_digit($value) || (int)$value<1)) { http_response_code(422); exit('Invalid reference'); }
-            if ($type==='decimal' && (!is_numeric($value) || (float)$value<0)) { http_response_code(422); exit('Invalid amount'); }
-            if (str_starts_with($type,'select:') && !in_array($value,explode(',',substr($type,7)),true)) { http_response_code(422); exit('Invalid choice'); }
+            $optional=str_starts_with($type,'optional-');
+            $baseType=$optional?substr($type,9):$type;
+            if ((!$optional && $value==='') || strlen($value)>255) { http_response_code(422); exit('Missing or invalid field'); }
+            if ($baseType==='number' && (!ctype_digit($value) || (int)$value<1)) { http_response_code(422); exit('Invalid reference'); }
+            if ($baseType==='decimal' && $value!=='' && (!is_numeric($value) || (float)$value<0)) { http_response_code(422); exit('Invalid amount'); }
+            if (str_starts_with($baseType,'select:') && $value!=='' && !in_array($value,explode(',',substr($baseType,7)),true)) { http_response_code(422); exit('Invalid choice'); }
             if ($type==='datetime-local') {
                 $date=DateTimeImmutable::createFromFormat('!Y-m-d\\TH:i',$value);
                 if (!$date || $date->format('Y-m-d\\TH:i')!==$value) { http_response_code(422); exit('Invalid date'); }
                 $value=$date->format('Y-m-d H:i:s');
             }
-            $values[]=$value;
+            $values[]=$optional && $value===''?null:$value;
+        }
+        if ($resource==='donations') {
+            $kind=$values[2];
+            if ($kind==='cash' && $values[3]===null) { http_response_code(422); exit('Cash donations require an amount.'); }
+            if ($kind==='in_kind' && ($values[6]===null || $values[7]===null || (float)$values[7]<=0 || $values[8]===null)) { http_response_code(422); exit('In-kind donations require category, positive quantity and unit.'); }
         }
         if ($resource==='beds') {
             $bedType=$values[2]; $position=$values[3];
@@ -80,9 +87,13 @@ function platformAdmin(string $resource,string $method): void {
     $html.='</tbody></table><h2>Add '.escape(ucfirst($resource)).'</h2><form method="post"><input type="hidden" name="_csrf" value="'.csrf().'">';
     foreach ($fields as $field=>$type) {
         $label=escape($field==='room_id'?'Room':ucwords(str_replace('_',' ',$field)));
-        if (str_starts_with($type,'select:')) {
-            $html.='<label>'.$label.'<select name="'.escape($field).'">';
-            foreach (explode(',',substr($type,7)) as $choice) $html.='<option value="'.escape($choice).'">'.escape($choice).'</option>';
+        $optional=str_starts_with($type,'optional-');
+        $baseType=$optional?substr($type,9):$type;
+        $required=$optional?'':' required';
+        if (str_starts_with($baseType,'select:')) {
+            $html.='<label>'.$label.'<select name="'.escape($field).'"'.$required.'>';
+            if ($optional) $html.='<option value="">Not applicable</option>';
+            foreach (explode(',',substr($baseType,7)) as $choice) $html.='<option value="'.escape($choice).'">'.escape($choice).'</option>';
             $html.='</select></label>';
         } elseif (in_array($field,['facility_id','room_id'],true)) {
             $relatedTable=$field==='facility_id'?'facilities':'rooms';
@@ -96,9 +107,9 @@ function platformAdmin(string $resource,string $method): void {
             }
             $html.='</select></label>';
         } else {
-            $inputType=$type==='decimal'?'number':$type;
-            $step=$type==='decimal'?' step="0.01" min="0"':($type==='number'?' min="1"':'');
-            $html.='<label>'.$label.'<input type="'.$inputType.'" name="'.escape($field).'" maxlength="255"'.$step.' required></label>';
+            $inputType=$baseType==='decimal'?'number':$baseType;
+            $step=$baseType==='decimal'?' step="0.01" min="0"':($baseType==='number'?' min="1"':'');
+            $html.='<label>'.$label.'<input type="'.$inputType.'" name="'.escape($field).'" maxlength="255"'.$step.$required.'></label>';
         }
     }
     view(ucfirst($resource),$html.'<button>Add record</button></form>');
