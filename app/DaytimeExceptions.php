@@ -35,8 +35,12 @@ function daytimeExceptionsPage(string $method): void {
     $html.='</table><h2>Authorize daytime access</h2><form method="post"><input type="hidden" name="_csrf" value="'.csrf().'"><label>Facility<select name="facility_id" required>';
     $facilities=db()->query('SELECT id,name FROM facilities WHERE active=1 ORDER BY name');
     while ($f=$facilities->fetch_assoc()) $html.='<option value="'.(int)$f['id'].'">'.escape($f['name']).'</option>';
-    $html.='</select></label><label>Resident ID (blank means facility-wide)<input name="resident_id" type="number" min="1"></label><label>Reason<select name="reason">';
+    $html.='</select></label><label>Resident (blank means facility-wide)<select name="resident_id" id="exception-resident"><option value="">All residents</option>';
+    $residents=db()->query('SELECT r.id,r.facility_id,r.display_name,r.reference_code,f.name AS facility_name FROM residents r JOIN facilities f ON f.id=r.facility_id WHERE f.active=1 ORDER BY f.name,r.display_name');
+    while ($r=$residents->fetch_assoc()) $html.='<option value="'.(int)$r['id'].'" data-facility="'.(int)$r['facility_id'].'">'.escape($r['facility_name'].' — '.$r['display_name'].' ('.$r['reference_code'].')').'</option>';
+    $html.='</select></label><label>Reason<select name="reason">';
     foreach (['cold_weather','rain','severe_weather','case_manager','group_meeting','other'] as $reason) $html.='<option value="'.$reason.'">'.escape(str_replace('_',' ',ucwords($reason,'_'))).'</option>';
     $html.='</select></label><label>Starts<input type="datetime-local" name="starts_at" required></label><label>Ends<input type="datetime-local" name="ends_at" required></label><label>Notes<input name="notes" maxlength="500"></label><button>Record exception</button></form>';
+    $html.='<script>const exceptionFacility=document.querySelector("select[name=facility_id]"),exceptionResident=document.getElementById("exception-resident");function filterExceptionResidents(){for(const option of exceptionResident.options){if(!option.value)continue;option.hidden=option.dataset.facility!==exceptionFacility.value;option.disabled=option.hidden;}if(exceptionResident.selectedOptions[0]?.disabled)exceptionResident.value="";}exceptionFacility.addEventListener("change",filterExceptionResidents);filterExceptionResidents();</script>';
     view('Daytime access exceptions',$html);
 }
