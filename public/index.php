@@ -8,9 +8,12 @@ require dirname(__DIR__) . '/app/ShelterSchedules.php';
 require dirname(__DIR__) . '/app/DaytimeExceptions.php';
 require dirname(__DIR__) . '/app/DaytimeFood.php';
 require dirname(__DIR__) . '/app/ResidentManagement.php';
+require dirname(__DIR__) . '/app/ResidentHistory.php';
 $path = parse_url($_SERVER['REQUEST_URI'] ?? '/', PHP_URL_PATH);
 $method = $_SERVER['REQUEST_METHOD'] ?? 'GET';
-if ($path === '/admin/residents') {
+if (preg_match('~^/admin/residents/([1-9][0-9]*)/history$~D',(string)$path,$residentHistoryMatch)) {
+    residentHistoryPage($method,(int)$residentHistoryMatch[1]);
+} elseif ($path === '/admin/residents') {
     residentManagement($method);
 } elseif ($path === '/admin/occupancy') {
     occupancyManagement($method);
