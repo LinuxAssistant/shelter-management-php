@@ -12,10 +12,24 @@ function daytimeExceptionsPage(string $method): void {
         $start=(string)($_POST['starts_at']??''); $end=(string)($_POST['ends_at']??'');
         $a=DateTimeImmutable::createFromFormat('!Y-m-d\\TH:i',$start);
         $b=DateTimeImmutable::createFromFormat('!Y-m-d\\TH:i',$end);
-        if (!$facility || ($residentRaw!=='' && (!$resident || $resident<1)) ||
-            !in_array($reason,['cold_weather','rain','severe_weather','case_manager','group_meeting','other'],true) ||
-            strlen($notes)>500 || !$a || !$b || $a->format('Y-m-d\\TH:i')!==$start ||
-            $b->format('Y-m-d\\TH:i')!==$end || $a >= $b) { http_response_code(422); exit('Invalid access exception'); }
+        $error=null;
+        if (!$facility || $facility<1) $error='Select a valid facility.';
+        elseif ($residentRaw!=='' && (!$resident || $resident<1)) $error='Select a valid resident or All residents.';
+        elseif (!in_array($reason,['cold_weather','rain','severe_weather','case_manager','group_meeting','other'],true)) $error='Select a valid reason.';
+        elseif (strlen($notes)>500) $error='Notes must be 500 characters or fewer.';
+        elseif (!$a || $a->format('Y-m-d\\TH:i')!==$start) $error='Enter a valid start date and time.';
+        elseif (!$b || $b->format('Y-m-d\\TH:i')!==$end) $error='Enter a valid end date and time.';
+        elseif ($a >= $b) $error='The end date and time must be after the start.';
+        if ($error!==null) {
+            http_response_code(422);
+            view('Unable to record daytime access','<p>'.escape($error).'</p><p><a href="/admin/daytime-exceptions">Return to daytime exceptions</a></p>');
+            return;
+        }
+        $facilityCheck=db()->prepare('SELECT id FROM facilities WHERE id=? AND active=1');
+        $facilityCheck->bind_param('i',$facility); $facilityCheck->execute();
+        if (!$facilityCheck->get_result()->fetch_row()) {
+            http_response_code(422); exit('The selected facility is not active.');
+        }
         if ($resident!==null) {
             $check=db()->prepare('SELECT id FROM residents WHERE id=? AND facility_id=?');
             $check->bind_param('ii',$resident,$facility); $check->execute();
