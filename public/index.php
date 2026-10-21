@@ -5,7 +5,7 @@ require dirname(__DIR__) . '/app/EmployeeManagement.php';
 require dirname(__DIR__) . '/app/PlatformAdmin.php';
 $path = parse_url($_SERVER['REQUEST_URI'] ?? '/', PHP_URL_PATH);
 $method = $_SERVER['REQUEST_METHOD'] ?? 'GET';
-if (preg_match('~^/admin/platform/(facilities|rooms|beds|volunteers|donations|expenses)$~D',(string)$path,$platformMatch)) {
+if (preg_match('~^/admin/platform/(facilities|rooms|beds|volunteers|donations|expenses|kitchen-inventory|kitchen-meals|kitchen-temperatures|kitchen-waste)$~D',(string)$path,$platformMatch)) {
     platformAdmin($platformMatch[1],$method);
 } elseif ($path === '/login' && $method === 'GET') {
     view('Employee login','<form method="post"><input type="hidden" name="_csrf" value="'.csrf().'"><label>Email or badge number <input name="identifier" required autocomplete="username"></label><label>Password <input type="password" name="password" required autocomplete="current-password"></label><button>Sign in</button></form>');
@@ -19,7 +19,7 @@ if (preg_match('~^/admin/platform/(facilities|rooms|beds|volunteers|donations|ex
 } elseif ($path === '/logout' && $method === 'POST') {
     requireAuth(); verifyCsrf(); $_SESSION=[]; session_destroy(); header('Location: /login'); exit;
 } elseif ($path === '/' && $method === 'GET') {
-    requireAuth(); view('Staff dashboard','<p>Welcome to Shelter Management.</p><p><a href="/incidents">View incident reports</a></p>'.(can('admin.manage')?'<p><a href="/admin/employees">Manage employees</a></p><p><a href="/admin/platform/facilities">Facilities</a> · <a href="/admin/platform/rooms">Rooms</a> · <a href="/admin/platform/beds">Beds</a> · <a href="/admin/platform/volunteers">Volunteers</a> · <a href="/admin/platform/donations">Donations</a> · <a href="/admin/platform/expenses">Expenses</a></p>':''));
+    requireAuth(); view('Staff dashboard','<p>Welcome to Shelter Management.</p><p><a href="/incidents">View incident reports</a></p>'.(can('admin.manage')?'<p><a href="/admin/employees">Manage employees</a></p><p><a href="/admin/platform/facilities">Facilities</a> · <a href="/admin/platform/rooms">Rooms</a> · <a href="/admin/platform/beds">Beds</a> · <a href="/admin/platform/volunteers">Volunteers</a> · <a href="/admin/platform/donations">Donations</a> · <a href="/admin/platform/expenses">Expenses</a></p><p><strong>Kitchen:</strong> <a href="/admin/platform/kitchen-inventory">Food inventory</a> · <a href="/admin/platform/kitchen-meals">Meals</a> · <a href="/admin/platform/kitchen-temperatures">Temperature logs</a> · <a href="/admin/platform/kitchen-waste">Waste</a></p>':''));
 } elseif ($path === '/incidents' && $method === 'GET') {
     requirePermission('incidents.view'); $rows=db()->query('SELECT id,category,severity,status,occurred_at FROM incidents ORDER BY occurred_at DESC LIMIT 100'); $html='<p><a href="/incidents/new">New incident</a></p><table><tr><th>ID</th><th>Category</th><th>Severity</th><th>Status</th><th>When</th></tr>';
     while($row=$rows->fetch_assoc()) $html.='<tr><td><a href="/incidents/'.(int)$row['id'].'">#'.(int)$row['id'].'</a></td><td>'.escape($row['category']).'</td><td>'.escape($row['severity']).'</td><td>'.escape($row['status']).'</td><td>'.escape($row['occurred_at']).'</td></tr>';
