@@ -6,7 +6,7 @@ function platformResources(): array {
     return [
         'facilities'=>['table'=>'facilities','fields'=>['name'=>'text','timezone'=>'text','address'=>'text']],
         'rooms'=>['table'=>'rooms','fields'=>['facility_id'=>'number','name'=>'text']],
-        'beds'=>['table'=>'beds','fields'=>['room_id'=>'number','code'=>'text']],
+        'beds'=>['table'=>'beds','fields'=>['room_id'=>'number','code'=>'text','bed_type'=>'select:single,bunk','position'=>'select:single,lower,upper']],
         'volunteers'=>['table'=>'volunteers','fields'=>['facility_id'=>'number','display_name'=>'text']],
         'donations'=>['table'=>'donations','fields'=>['facility_id'=>'number','donor_label'=>'text','kind'=>'select:cash,in_kind','amount'=>'decimal','description'=>'text','received_at'=>'datetime-local']],
         'expenses'=>['table'=>'expenses','fields'=>['facility_id'=>'number','description'=>'text','amount'=>'decimal','spent_at'=>'datetime-local']]
@@ -31,6 +31,18 @@ function platformAdmin(string $resource,string $method): void {
                 $value=$date->format('Y-m-d H:i:s');
             }
             $values[]=$value;
+        }
+        if ($resource==='beds') {
+            $bedType=$values[2]; $position=$values[3];
+            if (($bedType==='single' && $position!=='single') || ($bedType==='bunk' && !in_array($position,['lower','upper'],true))) {
+                http_response_code(422); exit('Choose Single position for a single bed, or Lower/Upper for a bunk.');
+            }
+            $check=db()->prepare('SELECT bed_type FROM beds WHERE room_id=? AND code=? LIMIT 1');
+            $check->bind_param('ss',$values[0],$values[1]); $check->execute();
+            $existing=$check->get_result()->fetch_assoc();
+            if ($existing && ($existing['bed_type']!==$bedType || $bedType==='single')) {
+                http_response_code(422); exit('This bed code is already used by a different bed type.');
+            }
         }
         $columns=implode(',',array_keys($fields));
         $placeholders=implode(',',array_fill(0,count($values),'?'));
