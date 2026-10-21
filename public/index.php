@@ -3,9 +3,15 @@ declare(strict_types=1);
 require dirname(__DIR__) . '/bootstrap/app.php';
 require dirname(__DIR__) . '/app/EmployeeManagement.php';
 require dirname(__DIR__) . '/app/PasswordManagement.php';
+require dirname(__DIR__) . '/app/PasswordResetTokens.php';
+require dirname(__DIR__) . '/app/PasswordResetPages.php';
 $path = parse_url($_SERVER['REQUEST_URI'] ?? '/', PHP_URL_PATH);
 $method = $_SERVER['REQUEST_METHOD'] ?? 'GET';
-if ($path === '/login' && $method === 'GET') {
+if ($path === '/reset-password' && $method === 'GET') {
+    passwordResetForm();
+} elseif ($path === '/reset-password' && $method === 'POST') {
+    passwordResetSubmit();
+} elseif ($path === '/login' && $method === 'GET') {
     view('Employee login','<form method="post"><input type="hidden" name="_csrf" value="'.csrf().'"><label>Email or badge number <input name="identifier" required autocomplete="username"></label><label>Password <input type="password" name="password" required autocomplete="current-password"></label><button>Sign in</button></form>');
 } elseif ($path === '/login' && $method === 'POST') {
     verifyCsrf();
