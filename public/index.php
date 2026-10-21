@@ -5,6 +5,7 @@ require dirname(__DIR__) . '/app/EmployeeManagement.php';
 require dirname(__DIR__) . '/app/PasswordManagement.php';
 require dirname(__DIR__) . '/app/PasswordResetTokens.php';
 require dirname(__DIR__) . '/app/PasswordResetPages.php';
+require dirname(__DIR__) . '/app/AuthRateLimit.php';
 $path = parse_url($_SERVER['REQUEST_URI'] ?? '/', PHP_URL_PATH);
 $method = $_SERVER['REQUEST_METHOD'] ?? 'GET';
 if ($path === '/reset-password' && $method === 'GET') {
@@ -16,9 +17,11 @@ if ($path === '/reset-password' && $method === 'GET') {
 } elseif ($path === '/login' && $method === 'POST') {
     verifyCsrf();
     $identifier=trim((string)($_POST['identifier'] ?? '')); $password=(string)($_POST['password'] ?? '');
+    $ip=(string)($_SERVER['REMOTE_ADDR']??'unknown');
+    if (!authRateHit('login-ip',$ip,30) || !authRateHit('login-id',$identifier,5)) { http_response_code(429); header('Retry-After: 900'); view('Too many attempts','<p>Please wait 15 minutes before trying again.</p>'); exit; }
     $stmt=db()->prepare('SELECT id,password_hash,session_version FROM users WHERE (email=? OR badge_number=?) AND active=1 LIMIT 1');
     $stmt->bind_param('ss',$identifier,$identifier); $stmt->execute(); $user=$stmt->get_result()->fetch_assoc();
-    if ($user && password_verify($password,$user['password_hash'])) { session_regenerate_id(true); $_SESSION['user_id']=(int)$user['id']; $_SESSION['session_version']=(int)$user['session_version']; header('Location: /'); exit; }
+    if ($user && password_verify($password,$user['password_hash'])) { authRateClear('login-id',$identifier); session_regenerate_id(true); $_SESSION['user_id']=(int)$user['id']; $_SESSION['session_version']=(int)$user['session_version']; header('Location: /'); exit; }
     http_response_code(401); view('Login failed','<p>Invalid credentials.</p><a href="/login">Try again</a>');
 } elseif ($path === '/logout' && $method === 'POST') {
     requireAuth(); verifyCsrf(); $_SESSION=[]; session_destroy(); header('Location: /login'); exit;
