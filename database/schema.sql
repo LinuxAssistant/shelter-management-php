@@ -210,3 +210,44 @@ CREATE TABLE resident_appointments (
  FOREIGN KEY (program_id) REFERENCES shelter_programs(id),
  INDEX idx_appointments (facility_id,starts_at)
 );
+
+
+-- ===== 013_daytime_exceptions_staff_meals.sql =====
+-- Staff meals and flexible daytime shelter access.
+ALTER TABLE kitchen_meals
+ ADD COLUMN audience ENUM('resident','staff') NOT NULL DEFAULT 'resident';
+CREATE TABLE daytime_access_exceptions (
+ id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+ facility_id BIGINT UNSIGNED NOT NULL,
+ resident_id BIGINT UNSIGNED NULL,
+ reason ENUM('cold_weather','rain','severe_weather','case_manager','group_meeting','other') NOT NULL,
+ starts_at DATETIME NOT NULL,
+ ends_at DATETIME NOT NULL,
+ authorized_by BIGINT UNSIGNED NOT NULL,
+ notes VARCHAR(500) NOT NULL DEFAULT '',
+ created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+ FOREIGN KEY (facility_id) REFERENCES facilities(id),
+ FOREIGN KEY (resident_id) REFERENCES residents(id),
+ FOREIGN KEY (authorized_by) REFERENCES users(id),
+ INDEX idx_access_facility_times (facility_id,starts_at,ends_at)
+);
+
+-- ===== 014_daytime_food.sql =====
+-- Food made available during weather-related or other authorized daytime stays.
+-- Records distribution totals, not individual resident consumption.
+CREATE TABLE daytime_food_distributions (
+ id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+ facility_id BIGINT UNSIGNED NOT NULL,
+ exception_id BIGINT UNSIGNED NULL,
+ served_at DATETIME NOT NULL,
+ food_description VARCHAR(255) NOT NULL,
+ source ENUM('donated','purchased','mixed') NOT NULL DEFAULT 'donated',
+ portions_served INT UNSIGNED NOT NULL DEFAULT 0,
+ notes VARCHAR(500) NOT NULL DEFAULT '',
+ recorded_by BIGINT UNSIGNED NOT NULL,
+ created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+ FOREIGN KEY (facility_id) REFERENCES facilities(id),
+ FOREIGN KEY (exception_id) REFERENCES daytime_access_exceptions(id),
+ FOREIGN KEY (recorded_by) REFERENCES users(id),
+ INDEX idx_daytime_food_facility (facility_id,served_at)
+);
