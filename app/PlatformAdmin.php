@@ -10,7 +10,7 @@ function platformResources(): array {
         'volunteers'=>['table'=>'volunteers','fields'=>['facility_id'=>'number','display_name'=>'text']],
         'donations'=>['table'=>'donations','fields'=>['facility_id'=>'number','donor_label'=>'text','kind'=>'select:cash,in_kind','amount'=>'optional-decimal','description'=>'optional-text','received_at'=>'datetime-local','item_category'=>'optional-select:bedding,clothing,toiletries,food,household,misc','quantity'=>'optional-decimal','unit'=>'optional-text','estimated_value'=>'optional-decimal']],
         'kitchen-inventory'=>['table'=>'kitchen_inventory','fields'=>['facility_id'=>'number','item_name'=>'text','quantity'=>'decimal','unit'=>'text','storage_location'=>'text','expires_on'=>'optional-date']],
-        'kitchen-meals'=>['table'=>'kitchen_meals','fields'=>['facility_id'=>'number','served_on'=>'date','meal_type'=>'select:breakfast,lunch,dinner,snack','description'=>'text','meals_served'=>'number-zero']],
+        'kitchen-meals'=>['table'=>'kitchen_meals','fields'=>['facility_id'=>'number','served_on'=>'date','meal_type'=>'select:breakfast,lunch,dinner,snack','audience'=>'select:resident,staff','description'=>'text','meals_served'=>'number-zero']],
         'kitchen-temperatures'=>['table'=>'kitchen_temperature_logs','fields'=>['facility_id'=>'number','equipment_name'=>'text','temperature_f'=>'signed-decimal','recorded_at'=>'datetime-local']],
         'kitchen-waste'=>['table'=>'kitchen_waste','fields'=>['facility_id'=>'number','item_name'=>'text','quantity'=>'decimal','unit'=>'text','reason'=>'text','recorded_at'=>'datetime-local']],
         'expenses'=>['table'=>'expenses','fields'=>['facility_id'=>'number','description'=>'text','amount'=>'decimal','spent_at'=>'datetime-local']]
