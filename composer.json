@@ -1,0 +1,14 @@
+{
+  "name": "linuxassistant/shelter-management-php",
+  "description": "Shelter management application",
+  "type": "project",
+  "require": {
+    "php": "^8.4",
+    "ext-mysqli": "*"
+  },
+  "autoload": {
+    "psr-4": {
+      "App\\": "app/"
+    }
+  }
+}
