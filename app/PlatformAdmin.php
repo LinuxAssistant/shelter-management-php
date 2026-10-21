@@ -9,6 +9,10 @@ function platformResources(): array {
         'beds'=>['table'=>'beds','fields'=>['room_id'=>'number','code'=>'text','bed_type'=>'select:single,bunk','position'=>'select:single,lower,upper']],
         'volunteers'=>['table'=>'volunteers','fields'=>['facility_id'=>'number','display_name'=>'text']],
         'donations'=>['table'=>'donations','fields'=>['facility_id'=>'number','donor_label'=>'text','kind'=>'select:cash,in_kind','amount'=>'optional-decimal','description'=>'optional-text','received_at'=>'datetime-local','item_category'=>'optional-select:bedding,clothing,toiletries,food,household,misc','quantity'=>'optional-decimal','unit'=>'optional-text','estimated_value'=>'optional-decimal']],
+        'kitchen-inventory'=>['table'=>'kitchen_inventory','fields'=>['facility_id'=>'number','item_name'=>'text','quantity'=>'decimal','unit'=>'text','storage_location'=>'text','expires_on'=>'optional-date']],
+        'kitchen-meals'=>['table'=>'kitchen_meals','fields'=>['facility_id'=>'number','served_on'=>'date','meal_type'=>'select:breakfast,lunch,dinner,snack','description'=>'text','meals_served'=>'number-zero']],
+        'kitchen-temperatures'=>['table'=>'kitchen_temperature_logs','fields'=>['facility_id'=>'number','equipment_name'=>'text','temperature_f'=>'signed-decimal','recorded_at'=>'datetime-local']],
+        'kitchen-waste'=>['table'=>'kitchen_waste','fields'=>['facility_id'=>'number','item_name'=>'text','quantity'=>'decimal','unit'=>'text','reason'=>'text','recorded_at'=>'datetime-local']],
         'expenses'=>['table'=>'expenses','fields'=>['facility_id'=>'number','description'=>'text','amount'=>'decimal','spent_at'=>'datetime-local']]
     ];
 }
@@ -25,6 +29,9 @@ function platformAdmin(string $resource,string $method): void {
             $baseType=$optional?substr($type,9):$type;
             if ((!$optional && $value==='') || strlen($value)>255) { http_response_code(422); exit('Missing or invalid field'); }
             if ($baseType==='number' && (!ctype_digit($value) || (int)$value<1)) { http_response_code(422); exit('Invalid reference'); }
+            if ($baseType==='number-zero' && (!ctype_digit($value) || (float)$value>2147483647)) { http_response_code(422); exit('Invalid count'); }
+            if ($baseType==='signed-decimal' && (!is_numeric($value) || !is_finite((float)$value))) { http_response_code(422); exit('Invalid temperature'); }
+            if ($baseType==='date' && (!DateTimeImmutable::createFromFormat('!Y-m-d',$value) || DateTimeImmutable::createFromFormat('!Y-m-d',$value)->format('Y-m-d')!==$value)) { http_response_code(422); exit('Invalid date'); }
             if ($baseType==='decimal' && $value!=='' && (!is_numeric($value) || (float)$value<0)) { http_response_code(422); exit('Invalid amount'); }
             if (str_starts_with($baseType,'select:') && $value!=='' && !in_array($value,explode(',',substr($baseType,7)),true)) { http_response_code(422); exit('Invalid choice'); }
             if ($type==='datetime-local') {
@@ -107,8 +114,8 @@ function platformAdmin(string $resource,string $method): void {
             }
             $html.='</select></label>';
         } else {
-            $inputType=$baseType==='decimal'?'number':$baseType;
-            $step=$baseType==='decimal'?' step="0.01" min="0"':($baseType==='number'?' min="1"':'');
+            $inputType=in_array($baseType,['decimal','signed-decimal','number-zero'],true)?'number':$baseType;
+            $step=$baseType==='decimal'?' step="0.01" min="0"':($baseType==='signed-decimal'?' step="0.01"':($baseType==='number-zero'?' min="0" step="1"':($baseType==='number'?' min="1"':'')));
             $html.='<label>'.$label.'<input type="'.$inputType.'" name="'.escape($field).'" maxlength="255"'.$step.$required.'></label>';
         }
     }
