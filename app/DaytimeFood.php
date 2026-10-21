@@ -40,8 +40,9 @@ function daytimeFoodPage(string $method): void {
     $facilities=db()->query('SELECT id,name FROM facilities WHERE active=1 ORDER BY name');
     while ($f=$facilities->fetch_assoc()) $html.='<option value="'.(int)$f['id'].'">'.escape($f['name']).'</option>';
     $html.='</select></label><label>Related daytime exception<select name="exception_id"><option value="">None</option>';
-    $exceptions=db()->query('SELECT e.id,e.reason,f.name AS facility_name,e.starts_at FROM daytime_access_exceptions e JOIN facilities f ON f.id=e.facility_id ORDER BY e.starts_at DESC LIMIT 100');
-    while ($e=$exceptions->fetch_assoc()) $html.='<option value="'.(int)$e['id'].'">'.escape($e['facility_name'].' — '.$e['reason'].' — '.$e['starts_at']).' (#'.(int)$e['id'].')</option>';
+    $exceptions=db()->query('SELECT e.id,e.facility_id,e.reason,f.name AS facility_name,e.starts_at FROM daytime_access_exceptions e JOIN facilities f ON f.id=e.facility_id ORDER BY e.starts_at DESC LIMIT 100');
+    while ($e=$exceptions->fetch_assoc()) $html.='<option value="'.(int)$e['id'].'" data-facility="'.(int)$e['facility_id'].'">'.escape($e['facility_name'].' — '.$e['reason'].' — '.$e['starts_at']).' (#'.(int)$e['id'].')</option>';
     $html.='</select></label><label>Food provided<input name="food_description" maxlength="255" required></label><label>Source<select name="source"><option value="donated">Donated</option><option value="purchased">Purchased</option><option value="mixed">Mixed</option></select></label><label>Date and time<input type="datetime-local" name="served_at" required></label><label>Portions served<input type="number" name="portions_served" min="0" value="0" required></label><label>Notes<input name="notes" maxlength="500"></label><button>Record food</button></form>';
+    $html.='<script>const foodFacility=document.querySelector("select[name=facility_id]"),foodException=document.querySelector("select[name=exception_id]");function filterFoodExceptions(){for(const option of foodException.options){if(!option.value)continue;option.hidden=option.dataset.facility!==foodFacility.value;option.disabled=option.hidden;}if(foodException.selectedOptions[0]?.disabled)foodException.value="";}foodFacility.addEventListener("change",filterFoodExceptions);filterFoodExceptions();</script>';
     view('Daytime food distributions',$html);
 }
