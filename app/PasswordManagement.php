@@ -24,7 +24,7 @@ function passwordChangeSave(): void {
     }
     $hash=password_hash($new,PASSWORD_DEFAULT);
     $oldHash=$row['password_hash'];
-    $stmt=db()->prepare('UPDATE users SET password_hash=? WHERE id=? AND password_hash=? AND active=1');
+    $stmt=db()->prepare('UPDATE users SET password_hash=?, session_version=session_version+1 WHERE id=? AND password_hash=? AND active=1');
     $stmt->bind_param('sis',$hash,$id,$oldHash); $stmt->execute();
     if ($stmt->affected_rows!==1) { http_response_code(409); exit('Password changed concurrently. Please sign in again.'); }
     $_SESSION=[]; session_regenerate_id(true); session_destroy();
