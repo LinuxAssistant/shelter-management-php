@@ -40,9 +40,9 @@ function residentManagement(string $method): void {
         header('Location: /admin/residents',true,303); exit;
     }
     if ($method!=='GET') { http_response_code(405); exit('Method not allowed'); }
-    $html='<p>Use fictional residents for testing. <a href="/admin/occupancy">Manage check-in and check-out</a></p><table><tr><th>Facility</th><th>Reference</th><th>Resident</th><th>Current bed</th></tr>';
+    $html='<p>Use fictional residents for testing. <a href="/admin/occupancy">Manage check-in and check-out</a></p><table><tr><th>Facility</th><th>Reference</th><th>Resident</th><th>Status</th><th>Current bed</th></tr>';
     $rows=db()->query("SELECT r.*,f.name AS facility_name,b.code AS bed_code,b.position,rm.name AS room_name FROM residents r JOIN facilities f ON f.id=r.facility_id LEFT JOIN stays s ON s.resident_id=r.id AND s.checked_out_at IS NULL LEFT JOIN beds b ON b.id=s.bed_id LEFT JOIN rooms rm ON rm.id=b.room_id ORDER BY r.id DESC LIMIT 100");
-    while ($r=$rows->fetch_assoc()) $html.='<tr><td>'.escape($r['facility_name']).'</td><td>'.escape($r['reference_code']).'</td><td>'.'<a href="/admin/residents/'.(int)$r['id'].'/history">'.escape($r['display_name']).'</a></td><td>'.($r['bed_code']===null?'Not checked in':escape($r['room_name'].' / '.$r['bed_code'].' ('.$r['position'].')')).'</td></tr>';
+    while ($r=$rows->fetch_assoc()) $html.='<tr><td>'.escape($r['facility_name']).'</td><td>'.escape($r['reference_code']).'</td><td>'.'<a href="/admin/residents/'.(int)$r['id'].'/history">'.escape($r['display_name']).'</a></td><td>'.($r['bed_code']===null?'Checked out':'Currently staying').'</td><td>'.($r['bed_code']===null?'Not checked in':escape($r['room_name'].' / '.$r['bed_code'].' ('.$r['position'].')')).'</td></tr>';
     $html.='</table><h2>Register resident</h2><form method="post"><input type="hidden" name="_csrf" value="'.csrf().'"><label>Facility<select name="facility_id" required><option value="">Select facility</option>';
     $facilities=db()->query('SELECT id,name FROM facilities WHERE active=1 ORDER BY name');
     while ($f=$facilities->fetch_assoc()) $html.='<option value="'.(int)$f['id'].'">'.escape($f['name']).'</option>';
