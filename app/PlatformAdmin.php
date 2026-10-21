@@ -62,27 +62,38 @@ function platformAdmin(string $resource,string $method): void {
     }
     if ($method!=='GET') { http_response_code(405); return; }
     $html='<p><a href="/">Dashboard</a></p><table><thead><tr><th>ID</th>';
-    foreach (array_keys($fields) as $field) $html.='<th>'.escape(ucwords(str_replace('_',' ',$field))).'</th>';
+    foreach (array_keys($fields) as $field) $html.='<th>'.escape($field==='room_id'?'Room':ucwords(str_replace('_',' ',$field))).'</th>';
     $html.='</tr></thead><tbody>';
-    $rows=db()->query("SELECT * FROM `$table` ORDER BY id DESC LIMIT 100");
+    $rows=db()->query($resource==='beds'
+        ? 'SELECT b.*,r.name AS room_name,f.name AS facility_name FROM beds b JOIN rooms r ON r.id=b.room_id JOIN facilities f ON f.id=r.facility_id ORDER BY b.id DESC LIMIT 100'
+        : "SELECT * FROM `$table` ORDER BY id DESC LIMIT 100");
     while ($row=$rows->fetch_assoc()) {
         $html.='<tr><td>'.(int)$row['id'].'</td>';
-        foreach (array_keys($fields) as $field) $html.='<td>'.escape((string)($row[$field]??'')).'</td>';
+        foreach (array_keys($fields) as $field) {
+            $display=$field==='room_id' && $resource==='beds'
+                ? $row['facility_name'].' — '.$row['room_name'].' (#'.$row['room_id'].')'
+                : (string)($row[$field]??'');
+            $html.='<td>'.escape((string)$display).'</td>';
+        }
         $html.='</tr>';
     }
     $html.='</tbody></table><h2>Add '.escape(ucfirst($resource)).'</h2><form method="post"><input type="hidden" name="_csrf" value="'.csrf().'">';
     foreach ($fields as $field=>$type) {
-        $label=escape(ucwords(str_replace('_',' ',$field)));
+        $label=escape($field==='room_id'?'Room':ucwords(str_replace('_',' ',$field)));
         if (str_starts_with($type,'select:')) {
             $html.='<label>'.$label.'<select name="'.escape($field).'">';
             foreach (explode(',',substr($type,7)) as $choice) $html.='<option value="'.escape($choice).'">'.escape($choice).'</option>';
             $html.='</select></label>';
         } elseif (in_array($field,['facility_id','room_id'],true)) {
             $relatedTable=$field==='facility_id'?'facilities':'rooms';
-            $relatedLabel=$field==='facility_id'?'name':'name';
-            $relatedRows=db()->query("SELECT id, name FROM `$relatedTable` WHERE active=1 ORDER BY name,id");
+            $relatedRows=db()->query($field==='room_id'
+                ? 'SELECT r.id, r.name, f.name AS facility_name FROM rooms r JOIN facilities f ON f.id=r.facility_id WHERE r.active=1 AND f.active=1 ORDER BY f.name,r.name,r.id'
+                : 'SELECT id, name FROM facilities WHERE active=1 ORDER BY name,id');
             $html.='<label>'.$label.'<select name="'.escape($field).'" required><option value="">Select '.escape($relatedTable).'</option>';
-            while ($related=$relatedRows->fetch_assoc()) $html.='<option value="'.(int)$related['id'].'">'.escape($related['name']).' (#'.(int)$related['id'].')</option>';
+            while ($related=$relatedRows->fetch_assoc()) {
+                $display=isset($related['facility_name'])?$related['facility_name'].' — '.$related['name']:$related['name'];
+                $html.='<option value="'.(int)$related['id'].'">'.escape($display).' (#'.(int)$related['id'].')</option>';
+            }
             $html.='</select></label>';
         } else {
             $inputType=$type==='decimal'?'number':$type;
