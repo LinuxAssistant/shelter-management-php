@@ -18,7 +18,7 @@ if ($path === '/login' && $method === 'GET') {
     requireAuth(); view('Staff dashboard','<p>Welcome to Shelter Management.</p><p><a href="/incidents">View incident reports</a></p>');
 } elseif ($path === '/incidents' && $method === 'GET') {
     requirePermission('incidents.view'); $rows=db()->query('SELECT id,category,severity,status,occurred_at FROM incidents ORDER BY occurred_at DESC LIMIT 100'); $html='<p><a href="/incidents/new">New incident</a></p><table><tr><th>ID</th><th>Category</th><th>Severity</th><th>Status</th><th>When</th></tr>';
-    while($row=$rows->fetch_assoc()) $html.='<tr><td>'.(int)$row['id'].'</td><td>'.escape($row['category']).'</td><td>'.escape($row['severity']).'</td><td>'.escape($row['status']).'</td><td>'.escape($row['occurred_at']).'</td></tr>';
+    while($row=$rows->fetch_assoc()) $html.='<tr><td><a href="/incidents/'.(int)$row['id'].'">#'.(int)$row['id'].'</a></td><td>'.escape($row['category']).'</td><td>'.escape($row['severity']).'</td><td>'.escape($row['status']).'</td><td>'.escape($row['occurred_at']).'</td></tr>';
     view('Incident reports',$html.'</table>');
 } elseif ($path === '/incidents/new' && $method === 'GET') {
     requirePermission('incidents.create'); view('Report incident','<form method="post" action="/incidents"><input type="hidden" name="_csrf" value="'.csrf().'"><label>Category <select name="category"><option>Medical</option><option>Safety</option><option>Conflict</option><option>Property</option><option>Other</option></select></label><label>Severity <select name="severity"><option>Low</option><option>Medium</option><option>High</option><option>Critical</option></select></label><label>Location <input name="location" maxlength="150" required></label><label>Description <textarea name="description" maxlength="10000" required></textarea></label><button>Submit report</button></form>');
@@ -29,4 +29,41 @@ if ($path === '/login' && $method === 'GET') {
     $stmt=db()->prepare('INSERT INTO incidents(category,severity,location,description,reported_by,occurred_at) VALUES(?,?,?,?,?,NOW())');
     $userId=(int)$_SESSION['user_id']; $stmt->bind_param('ssssi',$category,$severity,$location,$description,$userId); $stmt->execute();
     header('Location: /incidents',true,303); exit;
+} elseif (preg_match('~^/incidents/([1-9][0-9]*)$~D', (string)$path, $matches) && $method === 'GET') {
+    requirePermission('incidents.view');
+    $id=(int)$matches[1];
+    $stmt=db()->prepare('SELECT i.*,u.email AS reporter FROM incidents i JOIN users u ON u.id=i.reported_by WHERE i.id=?');
+    $stmt->bind_param('i',$id); $stmt->execute(); $incident=$stmt->get_result()->fetch_assoc();
+    if (!$incident) { http_response_code(404); exit('Incident not found'); }
+    $html='<p><a href="/incidents">Back to incidents</a></p><p><strong>Category:</strong> '.escape($incident['category']).' | <strong>Severity:</strong> '.escape($incident['severity']).'</p><p><strong>Location:</strong> '.escape($incident['location']).'</p><p><strong>Reported by:</strong> '.escape($incident['reporter']).'</p><p>'.nl2br(escape($incident['description'])).'</p>';
+    $stmt=db()->prepare('SELECT p.*,u.email AS added_by_email FROM incident_people p JOIN users u ON u.id=p.added_by WHERE p.incident_id=? ORDER BY p.id');
+    $stmt->bind_param('i',$id); $stmt->execute(); $people=$stmt->get_result();
+    $html.='<h2>People involved</h2><ul>';
+    while ($person=$people->fetch_assoc()) $html.='<li>'.escape($person['display_name']).' — '.escape($person['person_type']).' ('.escape($person['involvement']).')</li>';
+    $html.='</ul>';
+    if (can('incidents.people')) $html.='<form method="post" action="/incidents/'.$id.'/people"><input type="hidden" name="_csrf" value="'.csrf().'"><label>Name or identifier <input name="display_name" maxlength="150" required></label><label>Person type <select name="person_type"><option>Resident</option><option>Employee</option><option>Visitor</option><option>Unknown</option></select></label><label>Involvement <select name="involvement"><option>Witness</option><option>Affected</option><option>Reported</option><option>Other</option></select></label><button>Add person</button></form>';
+    $stmt=db()->prepare('SELECT n.*,u.email AS author FROM incident_notes n JOIN users u ON u.id=n.author_id WHERE n.incident_id=? ORDER BY n.created_at,n.id');
+    $stmt->bind_param('i',$id); $stmt->execute(); $notes=$stmt->get_result();
+    $html.='<h2>Employee notes</h2>';
+    while ($note=$notes->fetch_assoc()) $html.='<article><p>'.nl2br(escape($note['body'])).'</p><small>'.escape($note['author']).' · '.escape($note['created_at']).'</small></article><hr>';
+    if (can('incidents.note')) $html.='<form method="post" action="/incidents/'.$id.'/notes"><input type="hidden" name="_csrf" value="'.csrf().'"><label>Add a note <textarea name="body" maxlength="10000" required></textarea></label><button>Save note</button></form>';
+    view('Incident #'.$id,$html);
+} elseif (preg_match('~^/incidents/([1-9][0-9]*)/(notes|people)$~D', (string)$path, $matches) && $method === 'POST') {
+    $id=(int)$matches[1]; $kind=$matches[2];
+    requirePermission($kind==='notes'?'incidents.note':'incidents.people'); verifyCsrf();
+    $stmt=db()->prepare('SELECT id FROM incidents WHERE id=?'); $stmt->bind_param('i',$id); $stmt->execute();
+    if (!$stmt->get_result()->fetch_row()) { http_response_code(404); exit('Incident not found'); }
+    $author=(int)$_SESSION['user_id'];
+    if ($kind==='notes') {
+        $body=trim((string)($_POST['body'] ?? ''));
+        if ($body==='' || strlen($body)>10000) { http_response_code(422); exit('Invalid note'); }
+        $stmt=db()->prepare('INSERT INTO incident_notes(incident_id,author_id,body) VALUES(?,?,?)');
+        $stmt->bind_param('iis',$id,$author,$body);
+    } else {
+        $name=trim((string)($_POST['display_name'] ?? '')); $type=(string)($_POST['person_type'] ?? ''); $involvement=(string)($_POST['involvement'] ?? '');
+        if ($name==='' || strlen($name)>150 || !in_array($type,['Resident','Employee','Visitor','Unknown'],true) || !in_array($involvement,['Witness','Affected','Reported','Other'],true)) { http_response_code(422); exit('Invalid person'); }
+        $stmt=db()->prepare('INSERT INTO incident_people(incident_id,display_name,person_type,involvement,added_by) VALUES(?,?,?,?,?)');
+        $stmt->bind_param('isssi',$id,$name,$type,$involvement,$author);
+    }
+    $stmt->execute(); header('Location: /incidents/'.$id,true,303); exit;
 } else { http_response_code(404); view('Not found','<p>Page not found.</p>'); }
