@@ -4,7 +4,7 @@ declare(strict_types=1);
 /** Administration-only CRUD for nonclinical facility resources. */
 function platformResources(): array {
     return [
-        'facilities'=>['table'=>'facilities','fields'=>['name'=>'text','timezone'=>'text','address'=>'text']],
+        'facilities'=>['table'=>'facilities','fields'=>['name'=>'text','timezone'=>'timezone','address'=>'text']],
         'rooms'=>['table'=>'rooms','fields'=>['facility_id'=>'number','name'=>'text']],
         'beds'=>['table'=>'beds','fields'=>['room_id'=>'number','code'=>'text','bed_type'=>'select:single,bunk','position'=>'select:single,lower,upper']],
         'volunteers'=>['table'=>'volunteers','fields'=>['facility_id'=>'number','display_name'=>'text']],
@@ -31,7 +31,8 @@ function platformAdmin(string $resource,string $method): void {
             if ($baseType==='number' && (!ctype_digit($value) || (int)$value<1)) { http_response_code(422); exit('Invalid reference'); }
             if ($baseType==='number-zero' && (!ctype_digit($value) || (float)$value>2147483647)) { http_response_code(422); exit('Invalid count'); }
             if ($baseType==='signed-decimal' && (!is_numeric($value) || !is_finite((float)$value))) { http_response_code(422); exit('Invalid temperature'); }
-            if ($baseType==='date' && (!DateTimeImmutable::createFromFormat('!Y-m-d',$value) || DateTimeImmutable::createFromFormat('!Y-m-d',$value)->format('Y-m-d')!==$value)) { http_response_code(422); exit('Invalid date'); }
+            if ($baseType==='timezone' && !in_array($value,DateTimeZone::listIdentifiers(),true)) { http_response_code(422); exit('Invalid timezone'); }
+            if ($baseType==='date' && $value!=='' && (!DateTimeImmutable::createFromFormat('!Y-m-d',$value) || DateTimeImmutable::createFromFormat('!Y-m-d',$value)->format('Y-m-d')!==$value)) { http_response_code(422); exit('Invalid date'); }
             if ($baseType==='decimal' && $value!=='' && (!is_numeric($value) || (float)$value<0)) { http_response_code(422); exit('Invalid amount'); }
             if (str_starts_with($baseType,'select:') && $value!=='' && !in_array($value,explode(',',substr($baseType,7)),true)) { http_response_code(422); exit('Invalid choice'); }
             if ($type==='datetime-local') {
@@ -97,7 +98,11 @@ function platformAdmin(string $resource,string $method): void {
         $optional=str_starts_with($type,'optional-');
         $baseType=$optional?substr($type,9):$type;
         $required=$optional?'':' required';
-        if (str_starts_with($baseType,'select:')) {
+        if ($baseType==='timezone') {
+            $html.='<label>'.$label.'<select name="'.escape($field).'" required>';
+            foreach (DateTimeZone::listIdentifiers() as $zone) $html.='<option value="'.escape($zone).'"'.($zone==='America/Detroit'?' selected':'').'>'.escape($zone).'</option>';
+            $html.='</select></label>';
+        } elseif (str_starts_with($baseType,'select:')) {
             $html.='<label>'.$label.'<select name="'.escape($field).'"'.$required.'>';
             if ($optional) $html.='<option value="">Not applicable</option>';
             foreach (explode(',',substr($baseType,7)) as $choice) $html.='<option value="'.escape($choice).'">'.escape($choice).'</option>';
