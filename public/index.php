@@ -10,9 +10,9 @@ if ($path === '/login' && $method === 'GET') {
 } elseif ($path === '/login' && $method === 'POST') {
     verifyCsrf();
     $identifier=trim((string)($_POST['identifier'] ?? '')); $password=(string)($_POST['password'] ?? '');
-    $stmt=db()->prepare('SELECT id,password_hash FROM users WHERE (email=? OR badge_number=?) AND active=1 LIMIT 1');
+    $stmt=db()->prepare('SELECT id,password_hash,session_version FROM users WHERE (email=? OR badge_number=?) AND active=1 LIMIT 1');
     $stmt->bind_param('ss',$identifier,$identifier); $stmt->execute(); $user=$stmt->get_result()->fetch_assoc();
-    if ($user && password_verify($password,$user['password_hash'])) { session_regenerate_id(true); $_SESSION['user_id']=(int)$user['id']; header('Location: /'); exit; }
+    if ($user && password_verify($password,$user['password_hash'])) { session_regenerate_id(true); $_SESSION['user_id']=(int)$user['id']; $_SESSION['session_version']=(int)$user['session_version']; header('Location: /'); exit; }
     http_response_code(401); view('Login failed','<p>Invalid credentials.</p><a href="/login">Try again</a>');
 } elseif ($path === '/logout' && $method === 'POST') {
     requireAuth(); verifyCsrf(); $_SESSION=[]; session_destroy(); header('Location: /login'); exit;
