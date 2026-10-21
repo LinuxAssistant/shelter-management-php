@@ -1,6 +1,7 @@
 <?php
 declare(strict_types=1);
 require dirname(__DIR__) . '/bootstrap/app.php';
+require dirname(__DIR__) . '/app/EmployeeManagement.php';
 $path = parse_url($_SERVER['REQUEST_URI'] ?? '/', PHP_URL_PATH);
 $method = $_SERVER['REQUEST_METHOD'] ?? 'GET';
 if ($path === '/login' && $method === 'GET') {
@@ -15,7 +16,7 @@ if ($path === '/login' && $method === 'GET') {
 } elseif ($path === '/logout' && $method === 'POST') {
     requireAuth(); verifyCsrf(); $_SESSION=[]; session_destroy(); header('Location: /login'); exit;
 } elseif ($path === '/' && $method === 'GET') {
-    requireAuth(); view('Staff dashboard','<p>Welcome to Shelter Management.</p><p><a href="/incidents">View incident reports</a></p>');
+    requireAuth(); view('Staff dashboard','<p>Welcome to Shelter Management.</p><p><a href="/incidents">View incident reports</a></p>'.(can('admin.manage')?'<p><a href="/admin/employees">Manage employees</a></p>':''));
 } elseif ($path === '/incidents' && $method === 'GET') {
     requirePermission('incidents.view'); $rows=db()->query('SELECT id,category,severity,status,occurred_at FROM incidents ORDER BY occurred_at DESC LIMIT 100'); $html='<p><a href="/incidents/new">New incident</a></p><table><tr><th>ID</th><th>Category</th><th>Severity</th><th>Status</th><th>When</th></tr>';
     while($row=$rows->fetch_assoc()) $html.='<tr><td><a href="/incidents/'.(int)$row['id'].'">#'.(int)$row['id'].'</a></td><td>'.escape($row['category']).'</td><td>'.escape($row['severity']).'</td><td>'.escape($row['status']).'</td><td>'.escape($row['occurred_at']).'</td></tr>';
@@ -66,4 +67,20 @@ if ($path === '/login' && $method === 'GET') {
         $stmt->bind_param('isssi',$id,$name,$type,$involvement,$author);
     }
     $stmt->execute(); header('Location: /incidents/'.$id,true,303); exit;
+} elseif ($path === '/admin/employees' && $method === 'GET') {
+    employeePage();
+} elseif ($path === '/admin/employees/new' && $method === 'GET') {
+    employeeForm(null);
+} elseif ($path === '/admin/employees' && $method === 'POST') {
+    employeeSave(null);
+} elseif (preg_match('~^/admin/employees/([1-9][0-9]*)$~D',(string)$path,$employeeMatches)) {
+    requirePermission('admin.manage');
+    $employeeId=(int)$employeeMatches[1];
+    if ($method==='POST') employeeSave($employeeId);
+    elseif ($method==='GET') {
+        $stmt=db()->prepare('SELECT id,first_name,last_name,job_title,email,badge_number,active FROM users WHERE id=?');
+        $stmt->bind_param('i',$employeeId); $stmt->execute(); $employee=$stmt->get_result()->fetch_assoc();
+        if (!$employee) { http_response_code(404); exit('Employee not found'); }
+        employeeForm($employee);
+    } else { http_response_code(405); exit('Method not allowed'); }
 } else { http_response_code(404); view('Not found','<p>Page not found.</p>'); }
