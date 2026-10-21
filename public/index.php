@@ -6,14 +6,19 @@ require dirname(__DIR__) . '/app/PasswordManagement.php';
 require dirname(__DIR__) . '/app/PasswordResetTokens.php';
 require dirname(__DIR__) . '/app/PasswordResetPages.php';
 require dirname(__DIR__) . '/app/AuthRateLimit.php';
+require dirname(__DIR__) . '/app/ForgotPassword.php';
 $path = parse_url($_SERVER['REQUEST_URI'] ?? '/', PHP_URL_PATH);
 $method = $_SERVER['REQUEST_METHOD'] ?? 'GET';
-if ($path === '/reset-password' && $method === 'GET') {
+if ($path === '/forgot-password' && $method === 'GET') {
+    forgotPasswordForm();
+} elseif ($path === '/forgot-password' && $method === 'POST') {
+    forgotPasswordSubmit();
+} elseif ($path === '/reset-password' && $method === 'GET') {
     passwordResetForm();
 } elseif ($path === '/reset-password' && $method === 'POST') {
     passwordResetSubmit();
 } elseif ($path === '/login' && $method === 'GET') {
-    view('Employee login','<form method="post"><input type="hidden" name="_csrf" value="'.csrf().'"><label>Email or badge number <input name="identifier" required autocomplete="username"></label><label>Password <input type="password" name="password" required autocomplete="current-password"></label><button>Sign in</button></form>');
+    view('Employee login','<form method="post"><input type="hidden" name="_csrf" value="'.csrf().'"><label>Email or badge number <input name="identifier" required autocomplete="username"></label><label>Password <input type="password" name="password" required autocomplete="current-password"></label><button>Sign in</button></form><p><a href="/forgot-password">Forgot password?</a></p>');
 } elseif ($path === '/login' && $method === 'POST') {
     verifyCsrf();
     $identifier=trim((string)($_POST['identifier'] ?? '')); $password=(string)($_POST['password'] ?? '');
