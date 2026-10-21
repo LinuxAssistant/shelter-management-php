@@ -23,7 +23,6 @@ function employeeForm(?array $employee): void {
     if ($new) $html.='<label>Initial password (minimum 12 characters)<input type="password" name="password" minlength="12" required autocomplete="new-password"></label>';
     else $html.='<label><input type="checkbox" name="active" value="1" '.($employee['active']?'checked':'').'> Active account</label>';
     $html.='<button>'.($new?'Create employee':'Save changes').'</button></form>';
-    if (!$new) $html.='<form method="post" action="/admin/employees/'.$id.'/reset-password"><input type="hidden" name="_csrf" value="'.csrf().'"><button>Send password reset email</button></form>';
     view($new?'Add employee':'Edit employee',$html);
 }
 function employeeSave(?int $id): void {
