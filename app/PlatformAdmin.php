@@ -36,7 +36,16 @@ function platformAdmin(string $resource,string $method): void {
         $placeholders=implode(',',array_fill(0,count($values),'?'));
         $stmt=db()->prepare("INSERT INTO `$table` ($columns) VALUES ($placeholders)");
         $types=str_repeat('s',count($values));
-        $stmt->bind_param($types,...$values); $stmt->execute();
+        $stmt->bind_param($types,...$values);
+        try { $stmt->execute(); }
+        catch (mysqli_sql_exception $e) {
+            if (in_array((int)$e->getCode(),[1452,1062],true)) {
+                http_response_code(422);
+                view('Unable to save','<p>The selected related record does not exist, or this entry already exists. <a href="/admin/platform/'.escape($resource).'">Return to the form</a>.</p>');
+                return;
+            }
+            throw $e;
+        }
         header('Location: /admin/platform/'.$resource,true,303); exit;
     }
     if ($method!=='GET') { http_response_code(405); return; }
@@ -55,6 +64,13 @@ function platformAdmin(string $resource,string $method): void {
         if (str_starts_with($type,'select:')) {
             $html.='<label>'.$label.'<select name="'.escape($field).'">';
             foreach (explode(',',substr($type,7)) as $choice) $html.='<option value="'.escape($choice).'">'.escape($choice).'</option>';
+            $html.='</select></label>';
+        } elseif (in_array($field,['facility_id','room_id'],true)) {
+            $relatedTable=$field==='facility_id'?'facilities':'rooms';
+            $relatedLabel=$field==='facility_id'?'name':'name';
+            $relatedRows=db()->query("SELECT id, name FROM `$relatedTable` WHERE active=1 ORDER BY name,id");
+            $html.='<label>'.$label.'<select name="'.escape($field).'" required><option value="">Select '.escape($relatedTable).'</option>';
+            while ($related=$relatedRows->fetch_assoc()) $html.='<option value="'.(int)$related['id'].'">'.escape($related['name']).' (#'.(int)$related['id'].')</option>';
             $html.='</select></label>';
         } else {
             $inputType=$type==='decimal'?'number':$type;
