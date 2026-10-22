@@ -1,15 +1,17 @@
 # TODO — Shelter Management PHP
 
-Updated: 2026-10-21
+Updated: 2026-10-22
 Repository: https://github.com/LinuxAssistant/shelter-management-php
 Active development: draft PR #6, branch `feature/complete-shelter-platform`
 
 ## Resume tomorrow — first priorities
 
-- [ ] **Verify check-out status:** Test a fictional resident's staff-directed exit and voluntary departure. Confirm they disappear from **Bed Occupancy** but remain in **Residents** as **Checked out**, with no current bed. The status-column fix is commit `025105a`. Investigate whether any resident remains incorrectly marked as occupying a bed.
-- [ ] **Finish AJAX resident search:** `app/ResidentSearchApi.php` was added (commit `71b8029`), but its route was **not wired into `public/index.php`** and the check-in form still uses client-side filtering of all residents. Add `GET /api/residents/search?q=...`, authenticate/authorize, return limited JSON, and replace preloaded resident options with debounced `fetch()` results. Test by reference code and partial name. Do not claim AJAX is finished until verified.
-- [ ] **Verify Resident History:** New `app/ResidentHistory.php` and `/admin/residents/{id}/history` route, linked from Residents. Check check-in/out dates, departure type/reason, staff attribution, and older stays with unspecified type.
-- [ ] **Run PHP lint and GitHub Actions** on PR #6; fix any errors. Test key flows in browser before marking complete.
+- [x] **Verify check-out status:** Dell checkout was behind the branch; fast-forwarded to include status fix 025105a. Disposable MariaDB/HTTP tests verify staff-directed and voluntary exits, occupancy removal, checked-out resident status with no bed, repeat-exit rejection, and returning-resident check-in.
+- [x] **Finish AJAX resident search:** API route wired with existing administrator permission checks and no-store responses. Resident options load from debounced fetch requests; no resident list is preloaded. Tests cover partial names, reference codes, escaped LIKE wildcards, result limits, malformed queries, authentication/permissions, cancellation, stale responses, bed filtering, and empty/error/session states.
+- [x] **Verify Resident History:** Disposable HTTP tests verify both departure types, reason, staff attribution, older unspecified stays, and missing residents.
+- [x] **Run PHP lint and automated tests on Dell:** PHP lint, JavaScript syntax, asynchronous interface regression tests, and isolated MariaDB/HTTP integration tests pass. New tests are available in tests/; adding them to CI requires GitHub workflow write permission.
+- [ ] **Browser acceptance:** Visually verify search selection, bed filtering, both checkout types, and history before marking PR ready.
+- [ ] **GitHub Actions:** Confirm existing branch checks pass after push; wire new regression suites into CI once workflow write permission is available.
 
 ## Confirmed completed / locally tested
 
@@ -18,8 +20,8 @@ Active development: draft PR #6, branch `feature/complete-shelter-platform`
 - [x] Resident registration with automatically generated `RES-000001`-style codes (database ID-based).
 - [x] Resident check-in/out and bed availability pages implemented; staff-directed exit tested by user.
 - [x] Migration `015_stay_departures.sql` applied successfully after correcting `departed_by` to `BIGINT UNSIGNED`; user confirmed new columns and staff-directed exit works.
-- [x] Resident History feature committed (not yet browser-verified).
-- [x] Residents page status column committed (not yet browser-verified).
+- [x] Resident History verified by isolated HTTP integration tests; browser acceptance pending.
+- [x] Residents page status verified by isolated HTTP integration tests; browser acceptance pending.
 
 ## Platform work remaining
 
