@@ -24,6 +24,11 @@ function assignIncidentFacility(string $method,int $incidentId): void {
         $stmt=$database->prepare('INSERT INTO audit_events(actor_user_id,event_name,entity_type,entity_id) VALUES(?,?,?,?)');
         $stmt->bind_param('issi',$actor,$event,$entity,$incidentId); $stmt->execute();
         $database->commit();
-    } catch (Throwable $e) { $database->rollback(); throw $e; }
+    } catch (Throwable $e) {
+        $database->rollback();
+        error_log('Incident facility assignment failed for incident '.$incidentId);
+        http_response_code(500);
+        exit('Unable to assign facility. No changes were saved. Try again or contact an administrator.');
+    }
     header('Location: /incidents/'.$incidentId,true,303); exit;
 }

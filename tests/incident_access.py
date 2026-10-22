@@ -100,7 +100,8 @@ def run_tests(sql, request, csrf, check, password_hash, root):
     query("INSERT INTO incident_notes(incident_id,author_id,body) VALUES(102,1,'Historical synthetic note');")
     query("CREATE TRIGGER reject_synthetic_audit BEFORE INSERT ON audit_events FOR EACH ROW SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT='Synthetic audit failure';")
     try:
-        check(request(path,{"_csrf":admin_token,"facility_id":2},None)[0]==500,"Audit failure prevents successful attribution")
+        failure=request(path,{"_csrf":admin_token,"facility_id":2},None)
+        check(failure[0]==500 and "No changes were saved" in failure[1] and "Synthetic audit failure" not in failure[1],"Audit failure returns a controlled error without database details")
         check(query("SELECT facility_id IS NULL FROM incidents WHERE id=102;")=="1","Failed audit rolls back attribution")
     finally:
         query("DROP TRIGGER reject_synthetic_audit;")
