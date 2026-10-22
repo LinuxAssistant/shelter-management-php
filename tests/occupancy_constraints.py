@@ -2,6 +2,7 @@
 from concurrent.futures import ThreadPoolExecutor
 import json
 import os
+import re
 from pathlib import Path
 import subprocess
 import time
@@ -36,7 +37,11 @@ def run_tests(sql, root, sock, temp):
             sql("USE shelter_test; START TRANSACTION; "+insert+f"({resident},{bed},NOW()); DO SLEEP(0.2); COMMIT;")
             return "accepted"
         except subprocess.CalledProcessError as error:
-            check("1062" in error.stderr, "Concurrent SQL must reject a conflicting stay")
+            # MariaDB versions/lock schedules may choose a deadlock victim
+            # instead of waiting for the winner and reporting a duplicate key.
+            match=re.search(r"ERROR\s+(\d+)",error.stderr)
+            code=int(match[1]) if match else None
+            check(code in (1062,1205,1213), "Unexpected concurrent SQL error code: "+str(code))
             return "rejected"
     for choices in [[(100,100),(101,100)],[(100,100),(100,101)]]:
         with ThreadPoolExecutor(max_workers=2) as pool:
