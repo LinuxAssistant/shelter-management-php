@@ -34,7 +34,7 @@ Each module uses a feature branch and a focused PR. Add schema migrations, test 
 ## Existing work
 
 - PRs #1–#3 established authentication, incident reports/notes, employee profiles and employee management.
-- PR #4 (`feature/password-management`) is a **draft** covering self-service password changes only. Password resets, email delivery, throttling, audit events and global session invalidation remain future work.
+- PR #4 (`feature/password-management`) remains a separate draft and includes password changes, email-based reset, throttling, security audit events and session revocation. Both drafts are combined only in the separately tested local integration build and fictional Docker preview.
 
 ## Current complete-platform build
 
