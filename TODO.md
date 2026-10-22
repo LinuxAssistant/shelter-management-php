@@ -9,9 +9,9 @@ Active development: draft PR #6, branch `feature/complete-shelter-platform`
 - [x] **Verify check-out status:** Dell checkout was behind the branch; fast-forwarded to include status fix 025105a. Disposable MariaDB/HTTP tests verify staff-directed and voluntary exits, occupancy removal, checked-out resident status with no bed, repeat-exit rejection, and returning-resident check-in.
 - [x] **Finish AJAX resident search:** API route wired with existing administrator permission checks and no-store responses. Resident options load from debounced fetch requests; no resident list is preloaded. Tests cover partial names, reference codes, escaped LIKE wildcards, result limits, malformed queries, authentication/permissions, cancellation, stale responses, bed filtering, and empty/error/session states.
 - [x] **Verify Resident History:** Disposable HTTP tests verify both departure types, reason, staff attribution, older unspecified stays, and missing residents.
-- [x] **Run PHP lint and automated tests on Dell:** PHP lint, JavaScript syntax, asynchronous interface regression tests, and isolated MariaDB/HTTP integration tests pass. New tests are available in tests/; adding them to CI requires GitHub workflow write permission.
-- [ ] **Browser acceptance:** Visually verify search selection, bed filtering, both checkout types, and history before marking PR ready.
-- [ ] **GitHub Actions:** Confirm existing branch checks pass after push; wire new regression suites into CI once workflow write permission is available.
+- [x] **Run PHP lint and automated tests on Dell:** PHP lint, JavaScript syntax, asynchronous interface regression tests, and isolated MariaDB/HTTP integration tests pass. Resident HTTP/MariaDB and asynchronous search regression suites are now wired into GitHub Actions.
+- [x] **Browser acceptance:** Chromium and Firefox passed AJAX lookup by name/reference, facility bed filtering, check-in, both departures, status/history, and mobile form width. Fixed mobile control overflow found in screenshots.
+- [ ] **GitHub Actions:** Confirm lint, resident integration, search regression, and schema checks pass on the latest commit.
 
 ## Confirmed completed / locally tested
 
@@ -20,8 +20,8 @@ Active development: draft PR #6, branch `feature/complete-shelter-platform`
 - [x] Resident registration with automatically generated `RES-000001`-style codes (database ID-based).
 - [x] Resident check-in/out and bed availability pages implemented; staff-directed exit tested by user.
 - [x] Migration `015_stay_departures.sql` applied successfully after correcting `departed_by` to `BIGINT UNSIGNED`; user confirmed new columns and staff-directed exit works.
-- [x] Resident History verified by isolated HTTP integration tests; browser acceptance pending.
-- [x] Residents page status verified by isolated HTTP integration tests; browser acceptance pending.
+- [x] Resident History verified by isolated HTTP integration tests; Chromium/Firefox browser acceptance passed.
+- [x] Residents page status verified by isolated HTTP integration tests; Chromium/Firefox browser acceptance passed.
 
 ## Platform work remaining
 

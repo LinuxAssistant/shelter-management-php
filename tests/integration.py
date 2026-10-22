@@ -58,12 +58,14 @@ def run():
                     "INSERT INTO rooms(id,facility_id,name) VALUES(1,1,'Test room'),(2,2,'Other room');"
                     "INSERT INTO beds(id,room_id,code) VALUES(1,1,'TEST-BED'),(2,2,'OTHER-BED');"
                     "INSERT INTO residents(id,facility_id,reference_code,display_name) VALUES(1,1,'RES-TEST-001','Fictional Alpha'),(2,1,'RES-TEST-002','Fictional Beta'),(3,1,'RES-TEST-003','Literal %_! Name');")
+                sessions = temp / "sessions"
+                sessions.mkdir()
                 with socket.socket() as port_socket:
                     port_socket.bind(("127.0.0.1", 0))
                     port = port_socket.getsockname()[1]
                 env = dict(os.environ, DB_HOST="localhost", DB_USER="root", DB_PASSWORD="", DB_NAME="shelter_test", SESSION_SECURE="false")
                 with (temp / "http.log").open("w") as http_log:
-                    server = subprocess.Popen(["php", "-d", "mysqli.default_socket=" + sock, "-S", "127.0.0.1:" + str(port),
+                    server = subprocess.Popen(["php", "-d", "mysqli.default_socket=" + sock, "-d", "session.save_path=" + str(sessions), "-S", "127.0.0.1:" + str(port),
                                                "-t", str(app / "public"), str(app / "public/router.php")],
                                               cwd=app, env=env, stdout=http_log, stderr=http_log)
                     base = "http://127.0.0.1:" + str(port)
@@ -132,6 +134,11 @@ def run():
                     _, body, _ = request("/login", client=denied)
                     request("/login", {"_csrf":csrf(body), "identifier":"denied@example.invalid", "password":"fictional-test-password"}, denied)
                     check(request("/api/residents/search?q=Fictional", client=denied)[0] == 403, "Unauthorized search")
+                    import sys, runpy
+                    if "--browser" in sys.argv:
+                        browser_test = runpy.run_path(str(ROOT / "tests/browser_residents.py"))["run_browser"]
+                        for browser_name in ("chromium", "firefox"):
+                            browser_test(base, sql, browser_name)
                     print("PASS: isolated HTTP/MariaDB integration checks (checkout, returning residents, history, search, authorization, CSRF).")
             finally:
                 for process in (server, db):
