@@ -3,6 +3,8 @@ declare(strict_types=1);
 require dirname(__DIR__) . '/bootstrap/app.php';
 require dirname(__DIR__) . '/app/EmployeeManagement.php';
 require dirname(__DIR__) . '/app/ResidentAccess.php';
+require dirname(__DIR__) . '/app/IncidentAccess.php';
+require dirname(__DIR__) . '/app/IncidentFacilityAssignments.php';
 require dirname(__DIR__) . '/app/ResidentFacilityAssignments.php';
 require dirname(__DIR__) . '/app/PlatformAdmin.php';
 require dirname(__DIR__) . '/app/Chores.php';
@@ -48,25 +50,30 @@ if ($path === '/api/residents/search') {
 } elseif ($path === '/' && $method === 'GET') {
     requireAuth(); view('Staff dashboard','<p>Welcome to Shelter Management.</p><p><a href="/incidents">View incident reports</a></p>'.(canManageResidents()?'<p><a href="/admin/residents">Residents</a> · <a href="/admin/occupancy">Bed occupancy</a></p>':'').(can('admin.manage')?'<p><a href="/admin/employees">Manage employees</a></p><p><a href="/admin/platform/facilities">Facilities</a> · <a href="/admin/platform/rooms">Rooms</a> · <a href="/admin/platform/beds">Beds</a> · <a href="/admin/platform/volunteers">Volunteers</a> · <a href="/admin/platform/donations">Donations</a> · <a href="/admin/platform/expenses">Expenses</a></p><p><strong>Kitchen:</strong> <a href="/admin/platform/kitchen-inventory">Food inventory</a> · <a href="/admin/platform/kitchen-meals">Meals</a> · <a href="/admin/platform/kitchen-temperatures">Temperature logs</a> · <a href="/admin/platform/kitchen-waste">Waste</a></p><p><a href="/admin/chores">Manage chores</a> · <a href="/admin/schedules">Facility schedules</a> · <a href="/admin/programs">Programs and meetings</a> · <a href="/admin/daytime-exceptions">Daytime exceptions</a> · <a href="/admin/daytime-food">Daytime food</a></p>':''));
 } elseif ($path === '/incidents' && $method === 'GET') {
-    requirePermission('incidents.view'); $rows=db()->query('SELECT id,category,severity,status,occurred_at FROM incidents ORDER BY occurred_at DESC LIMIT 100'); $html='<p><a href="/incidents/new">New incident</a></p><table><tr><th>ID</th><th>Category</th><th>Severity</th><th>Status</th><th>When</th></tr>';
-    while($row=$rows->fetch_assoc()) $html.='<tr><td><a href="/incidents/'.(int)$row['id'].'">#'.(int)$row['id'].'</a></td><td>'.escape($row['category']).'</td><td>'.escape($row['severity']).'</td><td>'.escape($row['status']).'</td><td>'.escape($row['occurred_at']).'</td></tr>';
+    requireIncidentAccess('incidents.view'); $rows=db()->query('SELECT i.id,i.category,i.severity,i.status,i.occurred_at,f.name AS facility_name FROM incidents i LEFT JOIN facilities f ON f.id=i.facility_id WHERE '.incidentFacilityScope('i.facility_id').' ORDER BY i.occurred_at DESC LIMIT 100'); $html=(canManageIncidents('incidents.create')?'<p><a href="/incidents/new">New incident</a></p>':'').'<table><tr><th>ID</th><th>Facility</th><th>Category</th><th>Severity</th><th>Status</th><th>When</th></tr>';
+    while($row=$rows->fetch_assoc()) $html.='<tr><td><a href="/incidents/'.(int)$row['id'].'">#'.(int)$row['id'].'</a></td><td>'.escape($row['facility_name']??'Unassigned (administrator only)').'</td><td>'.escape($row['category']).'</td><td>'.escape($row['severity']).'</td><td>'.escape($row['status']).'</td><td>'.escape($row['occurred_at']).'</td></tr>';
     view('Incident reports',$html.'</table>');
 } elseif ($path === '/incidents/new' && $method === 'GET') {
-    requirePermission('incidents.create'); view('Report incident','<form method="post" action="/incidents"><input type="hidden" name="_csrf" value="'.csrf().'"><label>Category <select name="category"><option>Medical</option><option>Safety</option><option>Conflict</option><option>Property</option><option>Other</option></select></label><label>Severity <select name="severity"><option>Low</option><option>Medium</option><option>High</option><option>Critical</option></select></label><label>Location <input name="location" maxlength="150" required></label><label>Description <textarea name="description" maxlength="10000" required></textarea></label><button>Submit report</button></form>');
+    requireIncidentAccess('incidents.create'); view('Report incident','<form method="post" action="/incidents"><input type="hidden" name="_csrf" value="'.csrf().'">'.incidentFacilityOptions().'<label>Category <select name="category"><option>Medical</option><option>Safety</option><option>Conflict</option><option>Property</option><option>Other</option></select></label><label>Severity <select name="severity"><option>Low</option><option>Medium</option><option>High</option><option>Critical</option></select></label><label>Location <input name="location" maxlength="150" required></label><label>Description <textarea name="description" maxlength="10000" required></textarea></label><button>Submit report</button></form>');
 } elseif ($path === '/incidents' && $method === 'POST') {
-    requirePermission('incidents.create'); verifyCsrf();
+    requireIncidentAccess('incidents.create'); verifyCsrf();
     $category=(string)($_POST['category'] ?? ''); $severity=(string)($_POST['severity'] ?? ''); $location=trim((string)($_POST['location'] ?? '')); $description=trim((string)($_POST['description'] ?? ''));
     if (!in_array($category,['Medical','Safety','Conflict','Property','Other'],true) || !in_array($severity,['Low','Medium','High','Critical'],true) || $location==='' || $description==='' || strlen($location)>150 || strlen($description)>10000) { http_response_code(422); exit('Invalid incident details'); }
-    $stmt=db()->prepare('INSERT INTO incidents(category,severity,location,description,reported_by,occurred_at) VALUES(?,?,?,?,?,NOW())');
-    $userId=(int)$_SESSION['user_id']; $stmt->bind_param('ssssi',$category,$severity,$location,$description,$userId); $stmt->execute();
+    $facility=filter_var($_POST['facility_id']??null,FILTER_VALIDATE_INT);
+    if (!$facility || $facility<1) { http_response_code(422); exit('Select an active facility'); }
+    $stmt=db()->prepare('SELECT f.id FROM facilities f WHERE f.id=? AND f.active=1 AND '.incidentFacilityScope('f.id'));
+    $stmt->bind_param('i',$facility); $stmt->execute();
+    if (!$stmt->get_result()->fetch_row()) { http_response_code(422); exit('Select an active facility'); }
+    $stmt=db()->prepare('INSERT INTO incidents(category,severity,location,description,reported_by,facility_id,occurred_at) VALUES(?,?,?,?,?,?,NOW())');
+    $userId=(int)$_SESSION['user_id']; $stmt->bind_param('ssssii',$category,$severity,$location,$description,$userId,$facility); $stmt->execute();
     header('Location: /incidents',true,303); exit;
 } elseif (preg_match('~^/incidents/([1-9][0-9]*)$~D', (string)$path, $matches) && $method === 'GET') {
-    requirePermission('incidents.view');
+    requireIncidentAccess('incidents.view');
     $id=(int)$matches[1];
-    $stmt=db()->prepare('SELECT i.*,u.email AS reporter FROM incidents i JOIN users u ON u.id=i.reported_by WHERE i.id=?');
+    $stmt=db()->prepare('SELECT i.*,u.email AS reporter,f.name AS facility_name FROM incidents i JOIN users u ON u.id=i.reported_by LEFT JOIN facilities f ON f.id=i.facility_id WHERE i.id=? AND '.incidentFacilityScope('i.facility_id'));
     $stmt->bind_param('i',$id); $stmt->execute(); $incident=$stmt->get_result()->fetch_assoc();
     if (!$incident) { http_response_code(404); exit('Incident not found'); }
-    $html='<p><a href="/incidents">Back to incidents</a></p><p><strong>Category:</strong> '.escape($incident['category']).' | <strong>Severity:</strong> '.escape($incident['severity']).'</p><p><strong>Location:</strong> '.escape($incident['location']).'</p><p><strong>Reported by:</strong> '.escape($incident['reporter']).'</p><p>'.nl2br(escape($incident['description'])).'</p>';
+    $html='<p><a href="/incidents">Back to incidents</a></p><p><strong>Facility:</strong> '.escape($incident['facility_name']??'Unassigned (administrator only)').'</p><p><strong>Category:</strong> '.escape($incident['category']).' | <strong>Severity:</strong> '.escape($incident['severity']).'</p><p><strong>Location:</strong> '.escape($incident['location']).'</p><p><strong>Reported by:</strong> '.escape($incident['reporter']).'</p><p>'.nl2br(escape($incident['description'])).'</p>';
     $stmt=db()->prepare('SELECT p.*,u.email AS added_by_email FROM incident_people p JOIN users u ON u.id=p.added_by WHERE p.incident_id=? ORDER BY p.id');
     $stmt->bind_param('i',$id); $stmt->execute(); $people=$stmt->get_result();
     $html.='<h2>People involved</h2><ul>';
@@ -81,8 +88,8 @@ if ($path === '/api/residents/search') {
     view('Incident #'.$id,$html);
 } elseif (preg_match('~^/incidents/([1-9][0-9]*)/(notes|people)$~D', (string)$path, $matches) && $method === 'POST') {
     $id=(int)$matches[1]; $kind=$matches[2];
-    requirePermission($kind==='notes'?'incidents.note':'incidents.people'); verifyCsrf();
-    $stmt=db()->prepare('SELECT id FROM incidents WHERE id=?'); $stmt->bind_param('i',$id); $stmt->execute();
+    requireIncidentAccess($kind==='notes'?'incidents.note':'incidents.people'); verifyCsrf();
+    $stmt=db()->prepare('SELECT i.id FROM incidents i WHERE i.id=? AND '.incidentFacilityScope('i.facility_id')); $stmt->bind_param('i',$id); $stmt->execute();
     if (!$stmt->get_result()->fetch_row()) { http_response_code(404); exit('Incident not found'); }
     $author=(int)$_SESSION['user_id'];
     if ($kind==='notes') {
@@ -101,6 +108,8 @@ if ($path === '/api/residents/search') {
     employeePage();
 } elseif (preg_match('~^/admin/employees/([1-9][0-9]*)/resident-facilities$~D',(string)$path,$facilityAccessMatch)) {
     residentFacilityAssignments($method,(int)$facilityAccessMatch[1]);
+} elseif (preg_match('~^/admin/employees/([1-9][0-9]*)/incident-facilities$~D',(string)$path,$incidentAccessMatch)) {
+    incidentFacilityAssignments($method,(int)$incidentAccessMatch[1]);
 } elseif ($path === '/admin/employees/new' && $method === 'GET') {
     employeeForm(null);
 } elseif ($path === '/admin/employees' && $method === 'POST') {

@@ -27,7 +27,8 @@ Active development: draft PR #6, branch `feature/complete-shelter-platform`
 
 - [x] **Database-level occupancy safety:** Migration 017 adds unique active resident/bed keys and refuses duplicate open stays before altering the table. Transaction locking remains; concurrent SQL/PHP admission and migration-preflight tests pass. Migration NOT applied to the deployment database; see docs/active-stay-uniqueness.md.
 - [x] **Resident facility access:** Explicit assignments, scoped resident/search/history/intake/stay reads and writes, administrator assignment controls, audit events, and disposable regression tests implemented. Migration 018 is prepared only; see docs/resident-facility-access.md.
-- [ ] **Permissions and privacy:** Implement facility-scoped employee authorization across residents, stays, histories, incidents, and administrative modules. Do not use real resident data before security review.
+- [x] **Incident facility access:** Separate assignments plus existing role permissions scope reports, notes, people, and creation. Migration 019 preserves historical reports as administrator-only until attribution; see docs/incident-facility-access.md.
+- [ ] **Permissions and privacy:** Implement facility-scoped employee authorization for remaining operational modules and review global administrator capabilities. Resident and incident scope are implemented; historical incident attribution and independent privacy/security review remain. Do not use real resident data before security review.
 - [ ] **Authentication:** Review and integrate draft PR #4 password management carefully; it is separate from PR #6.
 - [ ] **Resident management:** Duplicate-record prevention, lookup before registration, intake updates, and appropriate case-management workflow.
 - [ ] **Operations:** Resident appointments, volunteer shifts, reporting, audit trail, inventory workflow, and additional form edit/validation capabilities.

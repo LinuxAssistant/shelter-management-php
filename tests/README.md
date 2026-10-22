@@ -23,3 +23,7 @@ The default integration run also exercises migration 017, direct unique-key viol
 ## Facility authorization
 
 The default integration run also checks employee facility assignments, scoped resident/search/history/bed reads, forged admission/departure and intake IDs, inconsistent legacy stays, administrator-only assignment changes, CSRF, audit events, immediate revocation, inactive facilities, and absence of role escalation. All accounts and residents are synthetic.
+
+## Incident authorization
+
+The default suite tests migration 019 preserving historical reports, independent incident role/facility requirements, scoped lists/details/notes/people, forged writes, assignment CSRF/auditing, revocation, inactive facilities, and deactivated sessions. It creates only fictional data in disposable databases.
