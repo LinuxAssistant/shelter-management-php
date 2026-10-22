@@ -35,4 +35,4 @@ Run composer install, then python3 tests/password-integration.py on Linux as an 
 
 The isolated suite passed on Dell with fictional accounts and captured local email. It covers reset forms/routes, permission denial, CSRF, current-password checks, password policy, expired/replaced/reused tokens, simultaneous issuance and consumption, session invalidation, account changes, throttling, and audit events.
 
-Before marking ready: run browser acceptance, verify production mail/HTTPS without real resident data, integrate the tests into CI when workflow write access is available, and complete an independent security review. Keep PR #4 draft.
+Before marking ready: run browser acceptance, verify production mail/HTTPS without real resident data, confirm the GitHub Actions integration run passes, and complete an independent security review. Keep PR #4 draft.

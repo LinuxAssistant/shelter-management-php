@@ -11,4 +11,4 @@ The suite creates a temporary MariaDB instance with networking disabled, applies
 
 Coverage includes administrator reset controls, authorization, CSRF, password validation, token expiration/replacement/reuse, simultaneous token issuance and consumption, old-password rejection, session invalidation across clients, inactive accounts, recovery-address changes, throttling, and audit events.
 
-The suite runs locally on Dell. The existing GitHub workflow performs PHP lint only; running integration tests in CI still requires a workflow update and the required runtime tools.
+The suite passed locally on Dell. GitHub Actions now installs MariaDB test tools, generates the autoloader, lints PHP, and runs the isolated suite on PHP 8.4.
