@@ -11,7 +11,7 @@ Active development: draft PR #6, branch `feature/complete-shelter-platform`
 - [x] **Verify Resident History:** Disposable HTTP tests verify both departure types, reason, staff attribution, older unspecified stays, and missing residents.
 - [x] **Run PHP lint and automated tests on Dell:** PHP lint, JavaScript syntax, asynchronous interface regression tests, and isolated MariaDB/HTTP integration tests pass. Resident HTTP/MariaDB and asynchronous search regression suites are now wired into GitHub Actions.
 - [x] **Browser acceptance:** Chromium and Firefox passed AJAX lookup by name/reference, facility bed filtering, check-in, both departures, status/history, and mobile form width. Fixed mobile control overflow found in screenshots.
-- [x] **GitHub Actions:** PHP lint/integration and schema smoke checks passed on 8d9e484 (facility access and 30-table schema). Backend/search suites also passed in an unprivileged Windows Docker container with networking disabled; Chromium/Firefox acceptance passed on Dell.
+- [x] **GitHub Actions:** PHP lint/integration and schema smoke checks passed on bb5dd06 (complete platform and 39-table schema). Backend/search suites also passed in an unprivileged Windows Docker container with networking disabled; Chromium/Firefox acceptance passed on Dell.
 
 ## Confirmed completed / locally tested
 
@@ -30,7 +30,7 @@ Active development: draft PR #6, branch `feature/complete-shelter-platform`
 - [x] **Historical incident attribution:** Administrators can assign an unscoped historical report once with explicit visibility guidance, active-facility validation, transaction locking, audit recording, and rollback on audit failure.
 - [x] **Incident facility access:** Separate assignments plus existing role permissions scope reports, notes, people, and creation. Migration 019 preserves historical reports as administrator-only until attribution; see docs/incident-facility-access.md.
 - [ ] **Permissions and privacy:** Resident, incident, operations, kitchen, finance, volunteer and case permissions are implemented and tested. Independent organizational privacy/security review remains before real data. Do not use real resident data before security review.
-- [ ] **Authentication:** Review and integrate draft PR #4 password management carefully; it is separate from PR #6.
+- [x] **Authentication integration preview:** Draft PR #4 password changes, resets, throttling, audit events and session revocation are combined with the complete platform in the separate review/password-platform-integration build. Both backend and Chromium/Firefox suites pass. PR #4 and PR #6 remain separate drafts.
 - [x] **Resident management:** Lookup before registration, transactional duplicate checks with distinct-person confirmation, audited intake updates, private case profiles/assignments/notes, referrals and appointments implemented.
 - [x] **Operations:** Appointments, volunteer shifts/approvals, scoped reports, audit viewing, stock movement ledger, acknowledgments/reconciliation, safe CSV exports, incident review status and role administration implemented.
 - [x] **Occupancy regression coverage:** Check-in/out, concurrent double-booking/resident admissions, cross-facility rejection, exit reasons, returning residents, basic permission denial, database constraints, and migration refusal/retry are covered. Facility-scoped authorization coverage remains part of the permissions work.
@@ -48,7 +48,7 @@ php -l app/ResidentSearchApi.php
 php -l public/index.php
 ```
 
-Migration 015 is already applied on the user's local database. New migration 017 is prepared and tested only in disposable databases; apply it once during a maintenance window after the documented backup/duplicate checks. **Do not re-run 015 or reimport `database/schema.sql` into the existing database.**
+Migration 015 is already applied on the user's local database. New migrations 017–023 are prepared and tested only in disposable databases; apply them in order during a maintenance window after the documented backup/duplicate checks. The combined authentication build additionally includes migrations 004–006 and 016; see docs/platform-operator-guide.md and the password-management documentation. **Do not re-run 015 or reimport `database/schema.sql` into the existing database.**
 
 ## Pull request policy
 
