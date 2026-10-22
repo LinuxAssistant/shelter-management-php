@@ -33,10 +33,11 @@ jobs:
         env:
           MYSQL_PWD: test-password
         run: |
-          test "$(mariadb --batch --skip-column-names --host=127.0.0.1 --user=shelter_app shelter_management -e 'SELECT COUNT(*) FROM information_schema.tables WHERE table_schema=DATABASE()')" = "29"
+          test "$(mariadb --batch --skip-column-names --host=127.0.0.1 --user=shelter_app shelter_management -e 'SELECT COUNT(*) FROM information_schema.tables WHERE table_schema=DATABASE()')" = "30"
           mariadb --host=127.0.0.1 --user=shelter_app shelter_management -e "
             SELECT audience FROM kitchen_meals LIMIT 0;
             SELECT id FROM daytime_access_exceptions LIMIT 0;
             SELECT id FROM daytime_food_distributions LIMIT 0;
             SELECT facility_id FROM facility_schedules LIMIT 0;
+            SELECT user_id,facility_id FROM resident_facility_access LIMIT 0;
           "
