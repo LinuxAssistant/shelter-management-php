@@ -11,7 +11,7 @@ Active development: draft PR #6, branch `feature/complete-shelter-platform`
 - [x] **Verify Resident History:** Disposable HTTP tests verify both departure types, reason, staff attribution, older unspecified stays, and missing residents.
 - [x] **Run PHP lint and automated tests on Dell:** PHP lint, JavaScript syntax, asynchronous interface regression tests, and isolated MariaDB/HTTP integration tests pass. Resident HTTP/MariaDB and asynchronous search regression suites are now wired into GitHub Actions.
 - [x] **Browser acceptance:** Chromium and Firefox passed AJAX lookup by name/reference, facility bed filtering, check-in, both departures, status/history, and mobile form width. Fixed mobile control overflow found in screenshots.
-- [ ] **GitHub Actions:** Confirm lint, resident integration, search regression, and schema checks pass on the latest commit.
+- [x] **GitHub Actions:** PHP lint/integration and schema smoke checks passed on 8d9e484 (facility access and 30-table schema). Backend/search suites also passed in an unprivileged Windows Docker container with networking disabled; Chromium/Firefox acceptance passed on Dell.
 
 ## Confirmed completed / locally tested
 
