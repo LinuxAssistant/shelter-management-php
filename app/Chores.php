@@ -9,13 +9,33 @@ function choresPage(string $method): void {
         if ($id) {
             $status=(string)($_POST['status']??'');
             if (!in_array($status,['pending','in_progress','completed','cancelled'],true)) { http_response_code(422); exit('Invalid status'); }
-            $stmt=db()->prepare("UPDATE chores c SET status=?, completed_at=IF(?='completed',NOW(),NULL) WHERE id=? AND ".moduleFacilityScope('operations','c.facility_id'));
-            $stmt->bind_param('ssi',$status,$status,$id); $stmt->execute();
-            if (!$stmt->affected_rows) {
-                $check=db()->prepare('SELECT c.id FROM chores c WHERE c.id=? AND '.moduleFacilityScope('operations','c.facility_id'));
-                $check->bind_param('i',$id); $check->execute();
-                if (!$check->get_result()->fetch_row()) { http_response_code(404); exit('Chore not found'); }
-            }
+            workflowChange(function($database) use($id,$status) {
+                $stmt=$database->prepare('SELECT c.*,f.timezone FROM chores c JOIN facilities f ON f.id=c.facility_id WHERE c.id=? AND '.moduleFacilityScope('operations').' FOR UPDATE');
+                $stmt->bind_param('i',$id); $stmt->execute(); $chore=$stmt->get_result()->fetch_assoc();
+                if (!$chore) { $database->rollback(); http_response_code(404); exit('Chore not found'); }
+                $stmt=$database->prepare("UPDATE chores SET status=?,completed_at=IF(?='completed',COALESCE(completed_at,NOW()),NULL) WHERE id=?");
+                $stmt->bind_param('ssi',$status,$status,$id); $stmt->execute();
+                workflowAudit('chore_status_updated','chore',$id);
+                if ($status==='completed' && $chore['recurrence']!=='none') {
+                    $stmt=$database->prepare('SELECT next_chore_id FROM chore_successors WHERE parent_chore_id=?');
+                    $stmt->bind_param('i',$id); $stmt->execute();
+                    if (!$stmt->get_result()->fetch_row()) {
+                        $zone=new DateTimeZone($chore['timezone']);
+                        $due=new DateTimeImmutable($chore['due_at'],$zone); $now=new DateTimeImmutable('now',$zone);
+                        $days=$chore['recurrence']==='weekly'?7:1;
+                        $elapsed=$due<$now?(int)$due->diff($now)->days:0;
+                        $steps=max(1,(int)floor($elapsed/$days)+1);
+                        $next=$due->modify('+'.($steps*$days).' days');
+                        if ($next<=$now) $next=$next->modify('+'.$days.' days');
+                        $when=$next->format('Y-m-d H:i:s');
+                        $stmt=$database->prepare('INSERT INTO chores(facility_id,title,description,area,assignee_type,assignee_id,due_at,recurrence) VALUES(?,?,?,?,?,?,?,?)');
+                        $stmt->bind_param('issssiss',$chore['facility_id'],$chore['title'],$chore['description'],$chore['area'],$chore['assignee_type'],$chore['assignee_id'],$when,$chore['recurrence']); $stmt->execute();
+                        $nextId=$database->insert_id;
+                        $stmt=$database->prepare('INSERT INTO chore_successors(parent_chore_id,next_chore_id) VALUES(?,?)');
+                        $stmt->bind_param('ii',$id,$nextId); $stmt->execute(); workflowAudit('recurring_chore_created','chore',$nextId);
+                    }
+                }
+            },'/admin/chores');
         } else {
             $facility=filter_var($_POST['facility_id']??null,FILTER_VALIDATE_INT);
             $title=trim((string)($_POST['title']??''));
@@ -43,7 +63,7 @@ function choresPage(string $method): void {
             $when=$dt->format('Y-m-d H:i:s');
             $stmt=db()->prepare('INSERT INTO chores(facility_id,title,description,area,assignee_type,assignee_id,due_at,recurrence) VALUES(?,?,?,?,?,?,?,?)');
             $stmt->bind_param('issssiss',$facility,$title,$description,$area,$type,$assigneeId,$when,$recurrence);
-            $stmt->execute();
+            auditedExecute($stmt,'chore_created','chore');
         }
         header('Location: /admin/chores',true,303); exit;
     }

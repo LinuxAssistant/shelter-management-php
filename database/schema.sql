@@ -388,3 +388,11 @@ CREATE TABLE case_referrals (
  FOREIGN KEY(resident_id) REFERENCES residents(id),
  FOREIGN KEY(created_by) REFERENCES users(id)
 );
+
+-- ===== 023_recurring_chores.sql =====
+CREATE TABLE chore_successors (
+ parent_chore_id BIGINT UNSIGNED PRIMARY KEY,
+ next_chore_id BIGINT UNSIGNED NOT NULL UNIQUE,
+ FOREIGN KEY(parent_chore_id) REFERENCES chores(id),
+ FOREIGN KEY(next_chore_id) REFERENCES chores(id)
+);

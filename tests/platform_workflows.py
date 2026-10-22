@@ -110,6 +110,12 @@ def run_tests(sql,request,csrf,check,password_hash,root):
     query("UPDATE facilities SET active=0 WHERE id=1;")
     check(get("/inventory",kitchen)[0]==403 and get("/cases",case)[0]==403,"Inactive facility denies modules")
     query("UPDATE facilities SET active=1 WHERE id=1;")
+    query("INSERT INTO chores(facility_id,title,due_at,recurrence) VALUES(1,'Recurring fixture','2026-01-01 10:00','daily');")
+    recurring=query("SELECT id FROM chores WHERE title='Recurring fixture';")
+    for _ in range(2):
+        check(post("/admin/chores",{"chore_id":recurring,"status":"completed"},ops)[0]==200,"Recurring chore completion")
+    check(query("SELECT COUNT(*) FROM chore_successors WHERE parent_chore_id="+recurring+";")=="1","Repeated completion creates one successor")
+    check(query("SELECT COUNT(*) FROM chores c JOIN chore_successors s ON s.next_chore_id=c.id WHERE s.parent_chore_id="+recurring+" AND c.status='pending' AND c.due_at>NOW();")=="1","Recurring chore advances to future occurrence")
     # Private profiles, case-worker assignment, referrals, and disclosure boundaries.
     profile={"action":"profile","caseworker_id":24,"emergency_contact":"Fictional emergency contact","consent_note":"Synthetic consent"}
     check(post("/cases/400",dict(profile,caseworker_id=25),case)[0]==422,"Foreign facility case worker rejected")
@@ -154,7 +160,7 @@ def run_tests(sql,request,csrf,check,password_hash,root):
         "INSERT INTO residents(id,facility_id,reference_code,display_name) VALUES(1,1,'UPGRADE-1','Upgrade resident');"
         "INSERT INTO case_notes(resident_id,author_id,body) VALUES(1,1,'Preserved note');"
         "INSERT INTO resident_appointments(facility_id,resident_id,appointment_type,starts_at,ends_at) VALUES(1,1,'other','2026-10-24 10:00','2026-10-24 11:00');")
-    for filename in ("020_facility_module_permissions.sql","021_platform_workflows.sql","022_casework_finance.sql"):
+    for filename in ("020_facility_module_permissions.sql","021_platform_workflows.sql","022_casework_finance.sql","023_recurring_chores.sql"):
         sql("USE platform_upgrade_test;\n"+(root/"database/migrations"/filename).read_text())
     check(sql("USE platform_upgrade_test; SELECT title FROM resident_appointments;").strip()=="Appointment","Legacy appointments preserved")
     check(sql("USE platform_upgrade_test; SELECT body FROM case_notes;").strip()=="Preserved note","Legacy case notes preserved")

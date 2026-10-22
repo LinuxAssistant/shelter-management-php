@@ -11,7 +11,7 @@ Employee access has three independent layers:
 
 Casework grants include optional case-worker assignment, emergency contact/consent notes, private notes, service referrals and appointments. Operational grants include operational resident names for chores and daytime access; they do not expose case notes. Finance grants allow donation acknowledgments, reconciliation and scoped CSV exports. CSV fields that resemble spreadsheet formulas are neutralized. Exports include up to the latest 5,000 authorized records.
 
-Inventory adjustments use an append-only movement log and cannot drive stock negative. Volunteer shifts reject overlaps; completed shifts record the approving employee. Approved hours use the shift's recorded start/end time. Daily, weekly and one-time chore recurrence is recorded as a schedule label; automatic future chore creation is not implemented.
+Inventory adjustments use an append-only movement log and cannot drive stock negative. Volunteer shifts reject overlaps; completed shifts record the approving employee. Approved hours use the shift's recorded start/end time. Completing a daily or weekly chore creates one linked future occurrence at the next due time after the present. Repeated completion submissions cannot create duplicate successors.
 
 Before registration, search existing residents. Matching names are blocked by default; a deliberate distinct-person confirmation permits different people with the same name. Intake updates preserve facility/reference and audit the change.
 
@@ -36,6 +36,7 @@ Review/apply forward migrations in order:
 - 020: explicit module permissions.
 - 021: appointment extensions, case-note author integrity, stock movements, volunteer approvals and public settings.
 - 022: financial reconciliation, private case profiles and referrals.
+- 023: linked recurring chores with one successor per completed occurrence.
 
 Migration 021 refuses orphaned legacy case-note authors through its foreign key. Reconcile authors to valid employees before migration; do not delete historical notes merely to bypass it. MariaDB DDL commits independently; stop on any migration error and inspect the schema before retrying. Do not run with --force.
 
