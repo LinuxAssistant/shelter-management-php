@@ -2,7 +2,7 @@
 
 ## Staff workflows
 
-The dashboard shows only authorized modules. Global administrators manage employees, roles, facilities, rooms, beds, public information and audit events.
+The dashboard shows only authorized modules. Global administrators manage employees, roles, facilities, rooms, beds, public information and audit events. Resource rows link to edit forms. Facility/room ownership stays fixed, occupied resources cannot be deactivated, reconciled donations cannot be edited, and stock quantity changes must use the movement ledger.
 
 Employee access has three independent layers:
 - Resident facility assignments: intake, resident lookup, stable references, check-in/out, and stay history.

@@ -16,6 +16,72 @@ function platformResources(): array {
         'expenses'=>['table'=>'expenses','fields'=>['facility_id'=>'number','description'=>'text','amount'=>'decimal','spent_at'=>'datetime-local']]
     ];
 }
+function platformEditForm(string $resource,array $config,?string $module,int $id): string {
+    $scope=$module===null?'1=1':moduleFacilityScope($module,'t.facility_id');
+    $stmt=db()->prepare('SELECT t.* FROM '.$config['table'].' t WHERE t.id=? AND '.$scope);
+    $stmt->bind_param('i',$id); $stmt->execute(); $record=$stmt->get_result()->fetch_assoc();
+    if (!$record) { http_response_code(404); return '<p>Record not found.</p>'; }
+    $html='<h2>Edit record #'.$id.'</h2>'.workflowForm().'<input type="hidden" name="edit_record_id" value="'.$id.'">';
+    foreach($config['fields'] as $field=>$type) {
+        $optional=str_starts_with($type,'optional-'); $base=$optional?substr($type,9):$type;
+        $value=(string)($record[$field]??'');
+        if ($base==='datetime-local') $value=str_replace(' ','T',substr($value,0,16));
+        $html.='<label>'.escape(ucwords(str_replace('_',' ',$field)));
+        if (str_starts_with($base,'select:') || $base==='timezone') {
+            $choices=$base==='timezone'?DateTimeZone::listIdentifiers():explode(',',substr($base,7));
+            $html.='<select name="'.$field.'"'.($optional?'':' required').'>';
+            if ($optional) $html.='<option value="">Not applicable</option>';
+            foreach($choices as $choice) $html.='<option value="'.escape($choice).'"'.($value===$choice?' selected':'').'>'.escape($choice).'</option>';
+            $html.='</select>';
+        } else {
+            $input=in_array($base,['decimal','signed-decimal','number-zero','number'],true)?'number':$base;
+            $readonly=in_array($field,['facility_id','room_id'],true) || ($resource==='kitchen-inventory' && $field==='quantity');
+            $html.='<input type="'.$input.'" name="'.$field.'" value="'.escape($value).'" step="any"'.($optional?'':' required').($readonly?' readonly':'').'>';
+        }
+        $html.='</label>';
+    }
+    if (in_array($resource,['facilities','rooms','beds','volunteers'],true)) $html.='<label><input type="checkbox" name="active" value="1" '.($record['active']?'checked':'').'> Active</label>';
+    return $html.'<p>Facility/room ownership is fixed to preserve history. Change inventory quantities through stock movements. Reconciled donations cannot be edited.</p><button>Save changes</button></form>';
+}
+function platformUpdate(string $resource,array $config,?string $module,array $values,int $id): void {
+    workflowChange(function($database) use($resource,$config,$module,$values,$id) {
+        $scope=$module===null?'1=1':moduleFacilityScope($module,'t.facility_id');
+        $stmt=$database->prepare('SELECT t.* FROM '.$config['table'].' t WHERE t.id=? AND '.$scope.' FOR UPDATE');
+        $stmt->bind_param('i',$id); $stmt->execute(); $record=$stmt->get_result()->fetch_assoc();
+        if (!$record) throw new DomainException('Record not found');
+        $fields=array_keys($config['fields']);
+        foreach($fields as $index=>$field) {
+            if (in_array($field,['facility_id','room_id'],true) && (int)$record[$field]!=(int)$values[$index]) throw new DomainException('Facility and room ownership cannot be changed');
+            if ($resource==='kitchen-inventory' && $field==='quantity' && (string)$record[$field]!==number_format((float)$values[$index],2,'.','')) throw new DomainException('Change quantities through stock movements');
+        }
+        if ($resource==='beds') {
+            $new=array_combine($fields,$values);
+            if (($new['bed_type']==='single' && $new['position']!=='single') || ($new['bed_type']==='bunk' && !in_array($new['position'],['lower','upper'],true))) throw new DomainException('Choose a valid bed position');
+            $stmt=$database->prepare('SELECT bed_type FROM beds WHERE room_id=? AND code=? AND id<>?');
+            $stmt->bind_param('isi',$new['room_id'],$new['code'],$id); $stmt->execute();
+            foreach($stmt->get_result() as $other) if ($other['bed_type']!==$new['bed_type'] || $new['bed_type']==='single') throw new DomainException('Bed code conflicts with another bed');
+        }
+        if ($resource==='donations') {
+            $stmt=$database->prepare('SELECT donation_id FROM donation_reconciliations WHERE donation_id=?');
+            $stmt->bind_param('i',$id); $stmt->execute();
+            if ($stmt->get_result()->fetch_row()) throw new DomainException('Reconciled donations cannot be changed');
+        }
+        if (in_array($resource,['facilities','rooms','beds','volunteers'],true)) {
+            $active=isset($_POST['active'])?1:0;
+            if (!$active && $resource!=='volunteers') {
+                $column=$resource==='facilities'?'rm.facility_id':($resource==='rooms'?'rm.id':'b.id');
+                $stmt=$database->prepare('SELECT s.id FROM stays s JOIN beds b ON b.id=s.bed_id JOIN rooms rm ON rm.id=b.room_id WHERE s.checked_out_at IS NULL AND '.$column.'=? LIMIT 1');
+                $stmt->bind_param('i',$id); $stmt->execute();
+                if ($stmt->get_result()->fetch_row()) throw new DomainException('Close active stays before deactivating this facility, room or bed');
+            }
+            $fields[]='active'; $values[]=$active;
+        }
+        $assignments=implode(',',array_map(fn($field)=>$field.'=?',$fields));
+        $stmt=$database->prepare('UPDATE '.$config['table'].' SET '.$assignments.' WHERE id=?');
+        $values[]=$id; $types=str_repeat('s',count($values));
+        $stmt->bind_param($types,...$values); $stmt->execute(); workflowAudit('resource_updated',$resource,$id);
+    },'/admin/platform/'.$resource);
+}
 function platformAdmin(string $resource,string $method): void {
     $module=str_starts_with($resource,'kitchen-')?'kitchen':(in_array($resource,['donations','expenses'],true)?'finance':($resource==='volunteers'?'volunteers':null));
     if ($module!==null) requireModule($module); else requirePermission('admin.manage');
@@ -58,7 +124,7 @@ function platformAdmin(string $resource,string $method): void {
             if ($kind==='cash' && $values[3]===null) { http_response_code(422); exit('Cash donations require an amount.'); }
             if ($kind==='in_kind' && ($values[6]===null || $values[7]===null || (float)$values[7]<=0 || $values[8]===null)) { http_response_code(422); exit('In-kind donations require category, positive quantity and unit.'); }
         }
-        if ($resource==='beds') {
+        if ($resource==='beds' && !isset($_POST['edit_record_id'])) {
             $bedType=$values[2]; $position=$values[3];
             if (($bedType==='single' && $position!=='single') || ($bedType==='bunk' && !in_array($position,['lower','upper'],true))) {
                 http_response_code(422); exit('Choose Single position for a single bed, or Lower/Upper for a bunk.');
@@ -78,6 +144,7 @@ function platformAdmin(string $resource,string $method): void {
             auditedExecute($stmt,'facility_updated','facility',$id);
             header('Location: /admin/platform/facilities',true,303); exit;
         }
+        if (isset($_POST['edit_record_id'])) platformUpdate($resource,$config,$module,$values,postedId('edit_record_id'));
         $columns=implode(',',array_keys($fields));
         $placeholders=implode(',',array_fill(0,count($values),'?'));
         $stmt=db()->prepare("INSERT INTO `$table` ($columns) VALUES ($placeholders)");
@@ -105,7 +172,7 @@ function platformAdmin(string $resource,string $method): void {
         ? 'SELECT b.*,r.name AS room_name,f.name AS facility_name FROM beds b JOIN rooms r ON r.id=b.room_id JOIN facilities f ON f.id=r.facility_id ORDER BY b.id DESC LIMIT 100'
         : ($module!==null ? "SELECT t.* FROM `$table` t WHERE ".moduleFacilityScope($module,'t.facility_id')." ORDER BY t.id DESC LIMIT 100" : "SELECT * FROM `$table` ORDER BY id DESC LIMIT 100"));
     while ($row=$rows->fetch_assoc()) {
-        $html.='<tr><td>'.(int)$row['id'].'</td>';
+        $html.='<tr><td><a href="?edit='.(int)$row['id'].'">#'.(int)$row['id'].'</a></td>';
         foreach (array_keys($fields) as $field) {
             $display=$field==='room_id' && $resource==='beds'
                 ? $row['facility_name'].' — '.$row['room_name'].' (#'.$row['room_id'].')'
@@ -116,6 +183,11 @@ function platformAdmin(string $resource,string $method): void {
         $html.='</tr>';
     }
     $html.='</tbody></table>';
+    if (isset($_GET['edit'])) {
+        $edit=filter_var($_GET['edit'],FILTER_VALIDATE_INT);
+        if (!$edit || $edit<1) { http_response_code(422); exit('Invalid record'); }
+        view('Edit '.ucfirst($resource),$html.platformEditForm($resource,$config,$module,(int)$edit)); return;
+    }
     if ($resource==='facilities') {
         $html.='<h2>Edit facility</h2><form method="post"><input type="hidden" name="_csrf" value="'.csrf().'"><label>Facility<select name="edit_facility_id" id="edit-facility" required>';
         $facilities=db()->query('SELECT id,name,timezone,address FROM facilities ORDER BY name,id');

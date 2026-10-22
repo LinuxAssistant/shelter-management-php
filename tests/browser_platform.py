@@ -23,7 +23,7 @@ def run_browser(base,sql,browser_name):
                     "/admin/chores","/admin/schedules","/admin/programs","/admin/daytime-exceptions","/admin/daytime-food",
                     "/admin/platform/volunteers","/admin/platform/donations","/admin/platform/expenses",
                     "/admin/platform/kitchen-inventory","/admin/platform/kitchen-meals","/admin/platform/kitchen-temperatures","/admin/platform/kitchen-waste",
-                    "/admin/employees/20/module-facilities","/admin/employees/20/roles","/admin/residents/400/edit"]
+                    "/admin/employees/20/module-facilities","/admin/employees/20/roles","/admin/residents/400/edit","/admin/platform/volunteers?edit=400","/admin/platform/kitchen-inventory?edit=400"]
             for path in routes:
                 response=page.goto(base+path)
                 assert response.status==200,path+" must load"

@@ -116,6 +116,18 @@ def run_tests(sql,request,csrf,check,password_hash,root):
         check(post("/admin/chores",{"chore_id":recurring,"status":"completed"},ops)[0]==200,"Recurring chore completion")
     check(query("SELECT COUNT(*) FROM chore_successors WHERE parent_chore_id="+recurring+";")=="1","Repeated completion creates one successor")
     check(query("SELECT COUNT(*) FROM chores c JOIN chore_successors s ON s.next_chore_id=c.id WHERE s.parent_chore_id="+recurring+" AND c.status='pending' AND c.due_at>NOW();")=="1","Recurring chore advances to future occurrence")
+    # Administrative edits preserve scope, ownership and protected ledgers.
+    check(get("/admin/platform/volunteers?edit=400",volunteer)[0]==200,"Edit accessible volunteer")
+    check(post("/admin/platform/volunteers",{"edit_record_id":400,"facility_id":1,"display_name":"Updated volunteer fixture","active":"1"},volunteer)[0]==200,"Volunteer edit saved")
+    check(post("/admin/platform/volunteers",{"edit_record_id":401,"facility_id":1,"display_name":"Forbidden edit","active":"1"},volunteer)[0]==422,"Foreign edit cannot change ownership")
+    stock={"edit_record_id":400,"facility_id":1,"item_name":"North stock fixture","quantity":"999","unit":"kg","storage_location":"Pantry","expires_on":""}
+    check(post("/admin/platform/kitchen-inventory",stock,kitchen)[0]==422,"Direct quantity edit cannot bypass stock ledger")
+    check(post("/admin/platform/kitchen-inventory",dict(stock,quantity="4.00",storage_location="Updated pantry"),kitchen)[0]==200,"Inventory metadata edit saved")
+    bed={"edit_record_id":1,"room_id":1,"code":"TEST-BED","bed_type":"single","position":"single"}
+    query("INSERT INTO stays(resident_id,bed_id,checked_in_at) VALUES(1,1,NOW());")
+    check(post("/admin/platform/beds",bed)[0]==422,"Occupied bed cannot be deactivated")
+    check(post("/admin/platform/beds",dict(bed,active="1",position="upper"))[0]==422,"Invalid bed layout edit denied")
+    query("UPDATE stays SET checked_out_at=NOW() WHERE resident_id=1 AND bed_id=1 AND checked_out_at IS NULL;")
     # Private profiles, case-worker assignment, referrals, and disclosure boundaries.
     profile={"action":"profile","caseworker_id":24,"emergency_contact":"Fictional emergency contact","consent_note":"Synthetic consent"}
     check(post("/cases/400",dict(profile,caseworker_id=25),case)[0]==422,"Foreign facility case worker rejected")
