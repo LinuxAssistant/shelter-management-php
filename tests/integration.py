@@ -143,6 +143,7 @@ def run():
                         browser_test = runpy.run_path(str(ROOT / "tests/browser_residents.py"))["run_browser"]
                         for browser_name in ("chromium", "firefox"):
                             browser_test(base, sql, browser_name)
+                            runpy.run_path(str(ROOT / "tests/browser_incidents.py"))["run_browser"](base, sql, browser_name)
                     print("PASS: isolated HTTP/MariaDB integration checks (checkout, returning residents, history, search, authorization, CSRF).")
             finally:
                 for process in (server, db):

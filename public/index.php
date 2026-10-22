@@ -4,6 +4,7 @@ require dirname(__DIR__) . '/bootstrap/app.php';
 require dirname(__DIR__) . '/app/EmployeeManagement.php';
 require dirname(__DIR__) . '/app/ResidentAccess.php';
 require dirname(__DIR__) . '/app/IncidentAccess.php';
+require dirname(__DIR__) . '/app/IncidentFacilityAttribution.php';
 require dirname(__DIR__) . '/app/IncidentFacilityAssignments.php';
 require dirname(__DIR__) . '/app/ResidentFacilityAssignments.php';
 require dirname(__DIR__) . '/app/PlatformAdmin.php';
@@ -67,6 +68,8 @@ if ($path === '/api/residents/search') {
     $stmt=db()->prepare('INSERT INTO incidents(category,severity,location,description,reported_by,facility_id,occurred_at) VALUES(?,?,?,?,?,?,NOW())');
     $userId=(int)$_SESSION['user_id']; $stmt->bind_param('ssssii',$category,$severity,$location,$description,$userId,$facility); $stmt->execute();
     header('Location: /incidents',true,303); exit;
+} elseif (preg_match('~^/incidents/([1-9][0-9]*)/facility$~D',(string)$path,$incidentFacilityMatch)) {
+    assignIncidentFacility($method,(int)$incidentFacilityMatch[1]);
 } elseif (preg_match('~^/incidents/([1-9][0-9]*)$~D', (string)$path, $matches) && $method === 'GET') {
     requireIncidentAccess('incidents.view');
     $id=(int)$matches[1];
@@ -85,6 +88,9 @@ if ($path === '/api/residents/search') {
     $html.='<h2>Employee notes</h2>';
     while ($note=$notes->fetch_assoc()) { $fullName=trim(($note['first_name'] ?? '').' '.($note['last_name'] ?? '')); $display=$fullName!==''?$fullName:$note['author']; $job=trim((string)($note['job_title'] ?? '')); $html.='<article><p>'.nl2br(escape($note['body'])).'</p><small>'.escape($display).($job!==''?' · '.escape($job):'').' · '.escape($note['created_at']).'</small></article><hr>'; }
     if (can('incidents.note')) $html.='<form method="post" action="/incidents/'.$id.'/notes"><input type="hidden" name="_csrf" value="'.csrf().'"><label>Add a note <textarea name="body" maxlength="10000" required></textarea></label><button>Save note</button></form>';
+    if ($incident['facility_id']===null && can('admin.manage')) {
+        $html.='<h2>Assign historical report to a facility</h2><p>Verify the correct facility before saving. Staff assigned to that facility with incident permissions will be able to read this report, its notes, and people involved. This assignment cannot be changed here.</p><form method="post" action="/incidents/'.$id.'/facility"><input type="hidden" name="_csrf" value="'.csrf().'">'.incidentFacilityOptions().'<button>Assign facility and grant facility access</button></form>';
+    }
     view('Incident #'.$id,$html);
 } elseif (preg_match('~^/incidents/([1-9][0-9]*)/(notes|people)$~D', (string)$path, $matches) && $method === 'POST') {
     $id=(int)$matches[1]; $kind=$matches[2];
