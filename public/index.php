@@ -7,6 +7,7 @@ require dirname(__DIR__) . '/app/PasswordResetTokens.php';
 require dirname(__DIR__) . '/app/PasswordResetPages.php';
 require dirname(__DIR__) . '/app/AuthRateLimit.php';
 require dirname(__DIR__) . '/app/ForgotPassword.php';
+require dirname(__DIR__) . '/app/AdminPasswordReset.php';
 $path = parse_url($_SERVER['REQUEST_URI'] ?? '/', PHP_URL_PATH);
 $method = $_SERVER['REQUEST_METHOD'] ?? 'GET';
 if ($path === '/forgot-password' && $method === 'GET') {
@@ -88,6 +89,10 @@ if ($path === '/forgot-password' && $method === 'GET') {
     $stmt->execute(); header('Location: /incidents/'.$id,true,303); exit;
 } elseif ($path === '/admin/employees' && $method === 'GET') {
     employeePage();
+} elseif (preg_match('~^/admin/employees/([1-9][0-9]*)/reset-password$~D',(string)$path,$resetMatch)) {
+    requirePermission('admin.manage');
+    if ($method!=='POST') { header('Allow: POST'); http_response_code(405); exit('Method not allowed'); }
+    adminResetPassword((int)$resetMatch[1]);
 } elseif ($path === '/admin/employees/new' && $method === 'GET') {
     employeeForm(null);
 } elseif ($path === '/admin/employees' && $method === 'POST') {

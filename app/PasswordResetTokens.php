@@ -1,45 +1,49 @@
 <?php
 declare(strict_types=1);
 
-/**
- * Store only a SHA-256 digest of the bearer token. Return the raw token once,
- * so a future mail-delivery integration can send it to the verified mailbox.
- * Never print the token in a web response or log.
- */
-function issuePasswordResetToken(int $userId): string {
-    $token=bin2hex(random_bytes(32));
-    $hash=hash('sha256',$token);
-    $db=db();
-    $db->begin_transaction();
+/** Return a bearer token only to the mail sender; store only its digest. */
+function issuePasswordResetToken(int $userId, ?string $expectedEmail=null): string {
+    $token=bin2hex(random_bytes(32)); $hash=hash('sha256',$token);
+    $database=db(); $database->begin_transaction();
     try {
-        $stmt=$db->prepare('DELETE FROM password_reset_tokens WHERE user_id=?');
+        // Every password mutation locks the user before locking token rows.
+        $stmt=$database->prepare('SELECT id,email FROM users WHERE id=? AND active=1 FOR UPDATE');
         $stmt->bind_param('i',$userId); $stmt->execute();
-        $stmt=$db->prepare('INSERT INTO password_reset_tokens(user_id,token_hash,expires_at) VALUES(?,?,DATE_ADD(UTC_TIMESTAMP(),INTERVAL 30 MINUTE))');
+        $user=$stmt->get_result()->fetch_assoc();
+        if (!$user || ($expectedEmail!==null && $user['email']!==$expectedEmail)) throw new DomainException('Employee account changed. Please try again.');
+        $stmt=$database->prepare('DELETE FROM password_reset_tokens WHERE user_id=?');
+        $stmt->bind_param('i',$userId); $stmt->execute();
+        $stmt=$database->prepare('INSERT INTO password_reset_tokens(user_id,token_hash,expires_at) VALUES(?,?,DATE_ADD(UTC_TIMESTAMP(),INTERVAL 30 MINUTE))');
         $stmt->bind_param('is',$userId,$hash); $stmt->execute();
-        $db->commit();
-    } catch (Throwable $e) { $db->rollback(); throw $e; }
+        passwordAudit('reset_token_issued',isset($_SESSION['user_id'])?(int)$_SESSION['user_id']:null,$userId);
+        $database->commit();
+    } catch (Throwable $e) { $database->rollback(); throw $e; }
     return $token;
 }
 
-/**
- * Consume the token and change password in one transaction. Locking the token
- * row prevents concurrent requests from reusing the same reset token.
- */
+/** Recheck a token after locking its user, then consume it atomically. */
 function consumePasswordResetToken(string $token,string $newPassword): bool {
-    if (!preg_match('/^[a-f0-9]{64}$/D',$token) || strlen($newPassword)<12 || strlen($newPassword)>1024) return false;
+    if (!preg_match('/^[a-f0-9]{64}$/D',$token) || !validNewPassword($newPassword)) return false;
     $hash=hash('sha256',$token);
-    $db=db(); $db->begin_transaction();
+    $database=db();
+    $stmt=$database->prepare('SELECT user_id FROM password_reset_tokens WHERE token_hash=?');
+    $stmt->bind_param('s',$hash); $stmt->execute(); $candidate=$stmt->get_result()->fetch_assoc();
+    if (!$candidate) return false;
+    $userId=(int)$candidate['user_id'];
+    $database->begin_transaction();
     try {
-        $stmt=$db->prepare('SELECT t.id,t.user_id FROM password_reset_tokens t JOIN users u ON u.id=t.user_id WHERE t.token_hash=? AND t.consumed_at IS NULL AND t.expires_at>UTC_TIMESTAMP() AND u.active=1 FOR UPDATE');
-        $stmt->bind_param('s',$hash); $stmt->execute(); $row=$stmt->get_result()->fetch_assoc();
-        if (!$row) { $db->rollback(); return false; }
-        $id=(int)$row['id']; $userId=(int)$row['user_id'];
+        $stmt=$database->prepare('SELECT id FROM users WHERE id=? AND active=1 FOR UPDATE');
+        $stmt->bind_param('i',$userId); $stmt->execute();
+        if (!$stmt->get_result()->fetch_row()) { $database->rollback(); return false; }
+        $stmt=$database->prepare('SELECT id FROM password_reset_tokens WHERE token_hash=? AND user_id=? AND consumed_at IS NULL AND expires_at>UTC_TIMESTAMP() FOR UPDATE');
+        $stmt->bind_param('si',$hash,$userId); $stmt->execute();
+        if (!$stmt->get_result()->fetch_row()) { $database->rollback(); return false; }
         $newHash=password_hash($newPassword,PASSWORD_DEFAULT);
-        $stmt=$db->prepare('UPDATE users SET password_hash=?,session_version=session_version+1 WHERE id=? AND active=1');
+        $stmt=$database->prepare('UPDATE users SET password_hash=?,session_version=session_version+1 WHERE id=?');
         $stmt->bind_param('si',$newHash,$userId); $stmt->execute();
-        if ($stmt->affected_rows!==1) { $db->rollback(); return false; }
-        $stmt=$db->prepare('UPDATE password_reset_tokens SET consumed_at=UTC_TIMESTAMP() WHERE id=?');
-        $stmt->bind_param('i',$id); $stmt->execute();
-        $db->commit(); return true;
-    } catch (Throwable $e) { $db->rollback(); throw $e; }
+        $stmt=$database->prepare('DELETE FROM password_reset_tokens WHERE user_id=?');
+        $stmt->bind_param('i',$userId); $stmt->execute();
+        passwordAudit('password_reset',null,$userId);
+        $database->commit(); return true;
+    } catch (Throwable $e) { $database->rollback(); throw $e; }
 }

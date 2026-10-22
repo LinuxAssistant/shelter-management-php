@@ -20,9 +20,12 @@ function employeeForm(?array $employee): void {
         $type=$key==='email'?'email':'text';
         $html.='<label>'.escape($label).'<input type="'.$type.'" name="'.$key.'" maxlength="255" value="'.escape((string)($employee[$key]??'')).'" required></label>';
     }
-    if ($new) $html.='<label>Initial password (minimum 12 characters)<input type="password" name="password" minlength="12" required autocomplete="new-password"></label>';
+    if ($new) $html.='<label>Initial password (minimum 12 characters)<input type="password" name="password" minlength="12" maxlength="72" required autocomplete="new-password"></label>';
     else $html.='<label><input type="checkbox" name="active" value="1" '.($employee['active']?'checked':'').'> Active account</label>';
     $html.='<button>'.($new?'Create employee':'Save changes').'</button></form>';
+    if (!$new && $employee['active']) {
+        $html.='<h2>Password recovery</h2><p>Send a reset link to the saved employee email address. Save any email changes first.</p><form method="post" action="/admin/employees/'.$id.'/reset-password"><input type="hidden" name="_csrf" value="'.csrf().'"><button>Send password reset email</button></form>';
+    }
     view($new?'Add employee':'Edit employee',$html);
 }
 function employeeSave(?int $id): void {
@@ -36,18 +39,29 @@ function employeeSave(?int $id): void {
     $first=$data['first_name']; $last=$data['last_name']; $title=$data['job_title']; $email=$data['email']; $badge=$data['badge_number'];
     if ($id===null) {
         $password=(string)($_POST['password']??'');
-        if (strlen($password)<12) { http_response_code(422); exit('Password must be at least 12 characters'); }
+        if (!validNewPassword($password)) { http_response_code(422); exit('Password must contain at least 12 characters and fit within 72 bytes'); }
         $hash=password_hash($password,PASSWORD_DEFAULT);
         $stmt=db()->prepare('INSERT INTO users(first_name,last_name,job_title,email,badge_number,password_hash) VALUES(?,?,?,?,?,?)');
         $stmt->bind_param('ssssss',$first,$last,$title,$email,$badge,$hash); $stmt->execute();
     } else {
-        $stmt=db()->prepare('SELECT id,active FROM users WHERE id=?');
-        $stmt->bind_param('i',$id); $stmt->execute(); $old=$stmt->get_result()->fetch_assoc();
-        if (!$old) { http_response_code(404); exit('Employee not found'); }
-        $active=isset($_POST['active'])?1:0;
-        if ($id===(int)$_SESSION['user_id'] && !$active) { http_response_code(422); exit('You cannot deactivate your own account'); }
-        $stmt=db()->prepare('UPDATE users SET first_name=?,last_name=?,job_title=?,email=?,badge_number=?,active=? WHERE id=?');
-        $stmt->bind_param('sssssii',$first,$last,$title,$email,$badge,$active,$id); $stmt->execute();
+        $database=db(); $database->begin_transaction();
+        try {
+            $stmt=$database->prepare('SELECT id,active,email FROM users WHERE id=? FOR UPDATE');
+            $stmt->bind_param('i',$id); $stmt->execute(); $old=$stmt->get_result()->fetch_assoc();
+            if (!$old) { $database->rollback(); http_response_code(404); exit('Employee not found'); }
+            $active=isset($_POST['active'])?1:0;
+            if ($id===(int)$_SESSION['user_id'] && !$active) { $database->rollback(); http_response_code(422); exit('You cannot deactivate your own account'); }
+            $invalidate=(int)$old['active']!==$active || $old['email']!==$email;
+            $versionIncrement=$invalidate?1:0;
+            $stmt=$database->prepare('UPDATE users SET first_name=?,last_name=?,job_title=?,email=?,badge_number=?,active=?,session_version=session_version+? WHERE id=?');
+            $stmt->bind_param('sssssiii',$first,$last,$title,$email,$badge,$active,$versionIncrement,$id); $stmt->execute();
+            if ($invalidate) {
+                $stmt=$database->prepare('DELETE FROM password_reset_tokens WHERE user_id=?');
+                $stmt->bind_param('i',$id); $stmt->execute();
+                passwordAudit('account_access_changed',(int)$_SESSION['user_id'],$id);
+            }
+            $database->commit();
+        } catch (Throwable $e) { $database->rollback(); throw $e; }
     }
     header('Location: /admin/employees',true,303); exit;
 }

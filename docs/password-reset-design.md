@@ -1,13 +1,19 @@
-# Password reset design (work in progress)
+# Password reset design
 
-Migration 005 creates `password_reset_tokens`. `app/PasswordResetTokens.php` contains functions for generating a cryptographically random bearer token, storing only its SHA-256 digest, expiring it after 30 minutes, and atomically consuming it to update the password and revoke prior sessions.
+Forgot-password and administrator-reset routes issue 32-byte random bearer tokens. Only SHA-256 digests are stored in password_reset_tokens; tokens expire after 30 minutes. Issuing a new token replaces earlier tokens for that user.
 
-The `/reset-password?token=...` form is now wired to the token consumption function, but there is deliberately no publicly accessible reset-request endpoint yet. Email verification and delivery, request throttling, non-enumerating responses, and secure link delivery must be implemented before enabling account recovery. Since tokens travel in reset URLs, deployment must avoid retaining them in web access logs, reverse-proxy logs, analytics, and referrers; the form sends a no-referrer policy. Never expose the returned raw token in a webpage, URL log, application log, or GitHub repository. Do not use this as a production password-reset system yet.
+Issuance, self-service password changes, account edits, and token consumption lock the user row before mutating token rows. Consumption rechecks the token after acquiring the user lock and atomically changes the password, increments session_version, removes pending tokens, and records an audit event. Concurrent consumption succeeds once. Self-service password changes verify the current session version under the lock.
 
-After updating the branch, apply migration 005 exactly once:
+Issuance checks that the saved recovery email still matches the address selected by the sender. Failed mail submission deletes only the corresponding token digest. Password changes and account email/status changes revoke all pending links.
 
-```bash
-mariadb -u shelter_app -p shelter_management < database/migrations/005_password_reset_tokens.sql
-```
+All authenticated requests reject inactive accounts and mismatched session versions. The administrator reset route is POST-only and requires admin.manage plus CSRF verification.
 
-Migration 004 is also required before this migration's reset consumption logic can run, because it increments `users.session_version`.
+## Deployment review
+
+Use HTTPS and secure session cookies. Configure the web server, reverse proxy, monitoring, and analytics to omit reset query strings; the application sets no-store and no-referrer on reset pages. A bearer token in a retained access log can grant account access.
+
+password_security_events contains event names, internal actor/subject IDs, and timestamps only. It does not store passwords, token digests, addresses, email bodies, or IP addresses. Restrict access and establish retention for these account records.
+
+Login, password-change, public recovery, and administrator-reset limits are database-backed. Production mail delivery, timing-based enumeration, distributed abuse, proxy/IP handling, retention, and independent security review remain deployment acceptance work.
+
+See password-management.md for migration order and mail configuration.
