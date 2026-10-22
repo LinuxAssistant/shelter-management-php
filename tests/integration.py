@@ -134,6 +134,8 @@ def run():
                     _, body, _ = request("/login", client=denied)
                     request("/login", {"_csrf":csrf(body), "identifier":"denied@example.invalid", "password":"fictional-test-password"}, denied)
                     check(request("/api/residents/search?q=Fictional", client=denied)[0] == 403, "Unauthorized search")
+                    import runpy
+                    runpy.run_path(str(ROOT / "tests/occupancy_constraints.py"))["run_tests"](sql, ROOT, sock, temp)
                     import sys, runpy
                     if "--browser" in sys.argv:
                         browser_test = runpy.run_path(str(ROOT / "tests/browser_residents.py"))["run_browser"]

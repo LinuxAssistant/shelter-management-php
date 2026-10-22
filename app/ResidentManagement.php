@@ -81,6 +81,11 @@ function occupancyManagement(string $method): void {
                 $db->commit();
             } catch (Throwable $e) {
                 $db->rollback();
+                if ($e instanceof mysqli_sql_exception && in_array((int)$e->getCode(),[1062,1205,1213],true)) {
+                    http_response_code(409);
+                    view('Availability changed','<p>Availability changed during check-in. Refresh occupancy and try again.</p><a href="/admin/occupancy">Return to occupancy</a>');
+                    return;
+                }
                 if ($e instanceof DomainException) { http_response_code(422); view('Unable to check in','<p>'.escape($e->getMessage()).'</p><a href="/admin/occupancy">Return to occupancy</a>'); return; }
                 throw $e;
             }

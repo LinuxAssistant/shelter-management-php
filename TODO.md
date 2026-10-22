@@ -25,13 +25,13 @@ Active development: draft PR #6, branch `feature/complete-shelter-platform`
 
 ## Platform work remaining
 
-- [ ] **Database-level occupancy safety:** Add unique active-stay constraints (one active bed per stay and one active stay per resident), including pre-migration checks for duplicate open stays; supplement transaction locking.
+- [x] **Database-level occupancy safety:** Migration 017 adds unique active resident/bed keys and refuses duplicate open stays before altering the table. Transaction locking remains; concurrent SQL/PHP admission and migration-preflight tests pass. Migration NOT applied to the deployment database; see docs/active-stay-uniqueness.md.
 - [ ] **Permissions and privacy:** Implement facility-scoped employee authorization across residents, stays, histories, incidents, and administrative modules. Do not use real resident data before security review.
 - [ ] **Authentication:** Review and integrate draft PR #4 password management carefully; it is separate from PR #6.
 - [ ] **Resident management:** Duplicate-record prevention, lookup before registration, intake updates, and appropriate case-management workflow.
 - [ ] **Operations:** Resident appointments, volunteer shifts, reporting, audit trail, inventory workflow, and additional form edit/validation capabilities.
-- [ ] **Quality:** Automated MariaDB integration tests for check-in/out, concurrent double-booking, cross-facility rejection, exit reasons, returning residents, and permissions.
-- [ ] **Deployment:** Production HTTPS, backups, secure sessions, access controls, and review of sensitive data retention.
+- [x] **Occupancy regression coverage:** Check-in/out, concurrent double-booking/resident admissions, cross-facility rejection, exit reasons, returning residents, basic permission denial, database constraints, and migration refusal/retry are covered. Facility-scoped authorization coverage remains part of the permissions work.
+- [ ] **Deployment:** Local HTTPS is installed and trusted; production HTTPS, backups, secure sessions, access controls, and sensitive-data retention review remain.
 
 ## Tomorrow's local commands
 
@@ -45,7 +45,7 @@ php -l app/ResidentSearchApi.php
 php -l public/index.php
 ```
 
-No new migration is needed for the latest resident-history/status commits. Migration 015 is already applied on the user's local database. **Do not re-run it or reimport `database/schema.sql` into the existing database.**
+Migration 015 is already applied on the user's local database. New migration 017 is prepared and tested only in disposable databases; apply it once during a maintenance window after the documented backup/duplicate checks. **Do not re-run 015 or reimport `database/schema.sql` into the existing database.**
 
 ## Pull request policy
 
