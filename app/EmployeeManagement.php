@@ -23,6 +23,7 @@ function employeeForm(?array $employee): void {
     if ($new) $html.='<label>Initial password (minimum 12 characters)<input type="password" name="password" minlength="12" required autocomplete="new-password"></label>';
     else $html.='<label><input type="checkbox" name="active" value="1" '.($employee['active']?'checked':'').'> Active account</label>';
     $html.='<button>'.($new?'Create employee':'Save changes').'</button></form>';
+    if (!$new) $html.='<p><a href="/admin/employees/'.$id.'/resident-facilities">Manage resident facility access</a></p>';
     view($new?'Add employee':'Edit employee',$html);
 }
 function employeeSave(?int $id): void {

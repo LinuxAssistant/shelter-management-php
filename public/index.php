@@ -2,6 +2,8 @@
 declare(strict_types=1);
 require dirname(__DIR__) . '/bootstrap/app.php';
 require dirname(__DIR__) . '/app/EmployeeManagement.php';
+require dirname(__DIR__) . '/app/ResidentAccess.php';
+require dirname(__DIR__) . '/app/ResidentFacilityAssignments.php';
 require dirname(__DIR__) . '/app/PlatformAdmin.php';
 require dirname(__DIR__) . '/app/Chores.php';
 require dirname(__DIR__) . '/app/ShelterSchedules.php';
@@ -44,7 +46,7 @@ if ($path === '/api/residents/search') {
 } elseif ($path === '/logout' && $method === 'POST') {
     requireAuth(); verifyCsrf(); $_SESSION=[]; session_destroy(); header('Location: /login'); exit;
 } elseif ($path === '/' && $method === 'GET') {
-    requireAuth(); view('Staff dashboard','<p>Welcome to Shelter Management.</p><p><a href="/incidents">View incident reports</a></p>'.(can('admin.manage')?'<p><a href="/admin/employees">Manage employees</a></p><p><a href="/admin/platform/facilities">Facilities</a> · <a href="/admin/platform/rooms">Rooms</a> · <a href="/admin/platform/beds">Beds</a> · <a href="/admin/platform/volunteers">Volunteers</a> · <a href="/admin/platform/donations">Donations</a> · <a href="/admin/platform/expenses">Expenses</a></p><p><strong>Kitchen:</strong> <a href="/admin/platform/kitchen-inventory">Food inventory</a> · <a href="/admin/platform/kitchen-meals">Meals</a> · <a href="/admin/platform/kitchen-temperatures">Temperature logs</a> · <a href="/admin/platform/kitchen-waste">Waste</a></p><p><a href="/admin/residents">Residents</a> · <a href="/admin/occupancy">Bed occupancy</a></p><p><a href="/admin/chores">Manage chores</a> · <a href="/admin/schedules">Facility schedules</a> · <a href="/admin/programs">Programs and meetings</a> · <a href="/admin/daytime-exceptions">Daytime exceptions</a> · <a href="/admin/daytime-food">Daytime food</a></p>':''));
+    requireAuth(); view('Staff dashboard','<p>Welcome to Shelter Management.</p><p><a href="/incidents">View incident reports</a></p>'.(canManageResidents()?'<p><a href="/admin/residents">Residents</a> · <a href="/admin/occupancy">Bed occupancy</a></p>':'').(can('admin.manage')?'<p><a href="/admin/employees">Manage employees</a></p><p><a href="/admin/platform/facilities">Facilities</a> · <a href="/admin/platform/rooms">Rooms</a> · <a href="/admin/platform/beds">Beds</a> · <a href="/admin/platform/volunteers">Volunteers</a> · <a href="/admin/platform/donations">Donations</a> · <a href="/admin/platform/expenses">Expenses</a></p><p><strong>Kitchen:</strong> <a href="/admin/platform/kitchen-inventory">Food inventory</a> · <a href="/admin/platform/kitchen-meals">Meals</a> · <a href="/admin/platform/kitchen-temperatures">Temperature logs</a> · <a href="/admin/platform/kitchen-waste">Waste</a></p><p><a href="/admin/chores">Manage chores</a> · <a href="/admin/schedules">Facility schedules</a> · <a href="/admin/programs">Programs and meetings</a> · <a href="/admin/daytime-exceptions">Daytime exceptions</a> · <a href="/admin/daytime-food">Daytime food</a></p>':''));
 } elseif ($path === '/incidents' && $method === 'GET') {
     requirePermission('incidents.view'); $rows=db()->query('SELECT id,category,severity,status,occurred_at FROM incidents ORDER BY occurred_at DESC LIMIT 100'); $html='<p><a href="/incidents/new">New incident</a></p><table><tr><th>ID</th><th>Category</th><th>Severity</th><th>Status</th><th>When</th></tr>';
     while($row=$rows->fetch_assoc()) $html.='<tr><td><a href="/incidents/'.(int)$row['id'].'">#'.(int)$row['id'].'</a></td><td>'.escape($row['category']).'</td><td>'.escape($row['severity']).'</td><td>'.escape($row['status']).'</td><td>'.escape($row['occurred_at']).'</td></tr>';
@@ -97,6 +99,8 @@ if ($path === '/api/residents/search') {
     $stmt->execute(); header('Location: /incidents/'.$id,true,303); exit;
 } elseif ($path === '/admin/employees' && $method === 'GET') {
     employeePage();
+} elseif (preg_match('~^/admin/employees/([1-9][0-9]*)/resident-facilities$~D',(string)$path,$facilityAccessMatch)) {
+    residentFacilityAssignments($method,(int)$facilityAccessMatch[1]);
 } elseif ($path === '/admin/employees/new' && $method === 'GET') {
     employeeForm(null);
 } elseif ($path === '/admin/employees' && $method === 'POST') {

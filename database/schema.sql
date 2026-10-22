@@ -281,3 +281,14 @@ ALTER TABLE stays
     ADD COLUMN active_bed_id BIGINT UNSIGNED AS (IF(checked_out_at IS NULL,bed_id,NULL)) PERSISTENT,
     ADD UNIQUE KEY uq_stays_active_resident(active_resident_id),
     ADD UNIQUE KEY uq_stays_active_bed(active_bed_id);
+
+-- ===== 018_resident_facility_access.sql =====
+-- Resident access is facility-specific unless the employee has admin.manage.
+-- No existing employee receives a new assignment automatically.
+CREATE TABLE resident_facility_access (
+    user_id BIGINT UNSIGNED NOT NULL,
+    facility_id BIGINT UNSIGNED NOT NULL,
+    PRIMARY KEY(user_id,facility_id),
+    FOREIGN KEY(user_id) REFERENCES users(id) ON DELETE CASCADE,
+    FOREIGN KEY(facility_id) REFERENCES facilities(id) ON DELETE CASCADE
+);

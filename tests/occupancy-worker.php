@@ -21,6 +21,8 @@ function db(): mysqli {
 }
 function requirePermission(string $permission): void {}
 function verifyCsrf(): void {}
+function requireResidentAccess(): void {}
+function residentFacilityScope(string $column): string { return '1=1'; }
 function escape(string $value): string { return htmlspecialchars($value,ENT_QUOTES|ENT_SUBSTITUTE,'UTF-8'); }
 function view(string $title,string $body): void {}
 require dirname(__DIR__).'/app/ResidentManagement.php';

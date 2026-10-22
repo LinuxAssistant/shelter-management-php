@@ -136,6 +136,7 @@ def run():
                     check(request("/api/residents/search?q=Fictional", client=denied)[0] == 403, "Unauthorized search")
                     import runpy
                     runpy.run_path(str(ROOT / "tests/occupancy_constraints.py"))["run_tests"](sql, ROOT, sock, temp)
+                    runpy.run_path(str(ROOT / "tests/facility_access.py"))["run_tests"](sql, request, csrf, check, password_hash)
                     import sys, runpy
                     if "--browser" in sys.argv:
                         browser_test = runpy.run_path(str(ROOT / "tests/browser_residents.py"))["run_browser"]
