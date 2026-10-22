@@ -29,3 +29,7 @@ The default integration run also checks employee facility assignments, scoped re
 The default suite tests migration 019 preserving historical reports, independent incident role/facility requirements, scoped lists/details/notes/people, forged writes, assignment CSRF/auditing, revocation, inactive facilities, and deactivated sessions. It creates only fictional data in disposable databases.
 
 Historical attribution tests also cover the administrator-only one-time assignment, audit failure rollback, repeated submissions, facility visibility after assignment, and the optional Chromium/Firefox mobile form flow.
+
+## Complete platform workflows
+
+The default suite now checks operations/module isolation, private case profiles/assignments/notes/referrals/appointments, volunteer overlap and approval, stock balances/ledger, reports, safe financial exports, acknowledgments/reconciliation, public privacy/settings, role administration, intake lookup/duplicates/updates, forward upgrade preservation, and backup/restoration. Optional browser tests cover all module pages, referral and stock forms, dashboard visibility, and mobile layouts in Chromium/Firefox.

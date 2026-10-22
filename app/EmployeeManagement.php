@@ -25,31 +25,37 @@ function employeeForm(?array $employee): void {
     $html.='<button>'.($new?'Create employee':'Save changes').'</button></form>';
     if (!$new) $html.='<p><a href="/admin/employees/'.$id.'/resident-facilities">Manage resident facility access</a></p>';
     if (!$new) $html.='<p><a href="/admin/employees/'.$id.'/incident-facilities">Manage incident facility access</a></p>';
+    if (!$new) $html.='<p><a href="/admin/employees/'.$id.'/module-facilities">Manage operations, kitchen, finance, volunteer and case access</a></p>';
+    if (!$new) $html.='<p><a href="/admin/employees/'.$id.'/roles">Manage employee roles</a></p>';
     view($new?'Add employee':'Edit employee',$html);
 }
 function employeeSave(?int $id): void {
     requirePermission('admin.manage'); verifyCsrf();
     $data=[];
-    foreach(['first_name','last_name','job_title','email','badge_number'] as $key) {
-        $data[$key]=trim((string)($_POST[$key]??''));
-        if ($data[$key]==='' || strlen($data[$key])>($key==='badge_number'?64:($key==='job_title'?120:($key==='email'?255:100)))) { http_response_code(422); exit('Invalid employee details'); }
-    }
+    foreach(['first_name'=>100,'last_name'=>100,'job_title'=>120,'email'=>255,'badge_number'=>64] as $key=>$max) $data[$key]=postedText($key,$max);
     if (!filter_var($data['email'],FILTER_VALIDATE_EMAIL)) { http_response_code(422); exit('Invalid email'); }
-    $first=$data['first_name']; $last=$data['last_name']; $title=$data['job_title']; $email=$data['email']; $badge=$data['badge_number'];
+    $hash=null;
     if ($id===null) {
-        $password=(string)($_POST['password']??'');
-        if (strlen($password)<12) { http_response_code(422); exit('Password must be at least 12 characters'); }
+        $password=$_POST['password']??null;
+        if (!is_string($password) || strlen($password)>72 || strlen($password)<12) { http_response_code(422); exit('Password must contain at least 12 characters'); }
         $hash=password_hash($password,PASSWORD_DEFAULT);
-        $stmt=db()->prepare('INSERT INTO users(first_name,last_name,job_title,email,badge_number,password_hash) VALUES(?,?,?,?,?,?)');
-        $stmt->bind_param('ssssss',$first,$last,$title,$email,$badge,$hash); $stmt->execute();
-    } else {
-        $stmt=db()->prepare('SELECT id,active FROM users WHERE id=?');
-        $stmt->bind_param('i',$id); $stmt->execute(); $old=$stmt->get_result()->fetch_assoc();
-        if (!$old) { http_response_code(404); exit('Employee not found'); }
-        $active=isset($_POST['active'])?1:0;
-        if ($id===(int)$_SESSION['user_id'] && !$active) { http_response_code(422); exit('You cannot deactivate your own account'); }
-        $stmt=db()->prepare('UPDATE users SET first_name=?,last_name=?,job_title=?,email=?,badge_number=?,active=? WHERE id=?');
-        $stmt->bind_param('sssssii',$first,$last,$title,$email,$badge,$active,$id); $stmt->execute();
     }
-    header('Location: /admin/employees',true,303); exit;
+    workflowChange(function($database) use($id,$data,$hash) {
+        lockAdministrativeChanges();
+        $first=$data['first_name']; $last=$data['last_name']; $title=$data['job_title']; $email=$data['email']; $badge=$data['badge_number'];
+        if ($id===null) {
+            $stmt=$database->prepare('INSERT INTO users(first_name,last_name,job_title,email,badge_number,password_hash) VALUES(?,?,?,?,?,?)');
+            $stmt->bind_param('ssssss',$first,$last,$title,$email,$badge,$hash); $stmt->execute();
+            workflowAudit('employee_created','user',$database->insert_id);
+        } else {
+            $stmt=$database->prepare('SELECT id FROM users WHERE id=? FOR UPDATE');
+            $stmt->bind_param('i',$id); $stmt->execute();
+            if (!$stmt->get_result()->fetch_row()) throw new DomainException('Employee not found');
+            $active=isset($_POST['active'])?1:0;
+            if ($id===(int)$_SESSION['user_id'] && !$active) throw new DomainException('You cannot deactivate your own account');
+            $stmt=$database->prepare('UPDATE users SET first_name=?,last_name=?,job_title=?,email=?,badge_number=?,active=? WHERE id=?');
+            $stmt->bind_param('sssssii',$first,$last,$title,$email,$badge,$active,$id); $stmt->execute();
+            workflowAudit('employee_updated','user',$id);
+        }
+    },'/admin/employees');
 }

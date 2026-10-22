@@ -17,7 +17,9 @@ function platformResources(): array {
     ];
 }
 function platformAdmin(string $resource,string $method): void {
-    requirePermission('admin.manage');
+    $module=str_starts_with($resource,'kitchen-')?'kitchen':(in_array($resource,['donations','expenses'],true)?'finance':($resource==='volunteers'?'volunteers':null));
+    if ($module!==null) requireModule($module); else requirePermission('admin.manage');
+    header('Cache-Control: no-store');
     $config=platformResources()[$resource]??null;
     if (!$config) { http_response_code(404); return; }
     $table=$config['table']; $fields=$config['fields'];
@@ -33,7 +35,7 @@ function platformAdmin(string $resource,string $method): void {
             if ($baseType==='signed-decimal' && (!is_numeric($value) || !is_finite((float)$value))) { http_response_code(422); exit('Invalid temperature'); }
             if ($baseType==='timezone' && !in_array($value,DateTimeZone::listIdentifiers(),true)) { http_response_code(422); exit('Invalid timezone'); }
             if ($baseType==='date' && $value!=='' && (!DateTimeImmutable::createFromFormat('!Y-m-d',$value) || DateTimeImmutable::createFromFormat('!Y-m-d',$value)->format('Y-m-d')!==$value)) { http_response_code(422); exit('Invalid date'); }
-            if ($baseType==='decimal' && $value!=='' && (!is_numeric($value) || (float)$value<0)) { http_response_code(422); exit('Invalid amount'); }
+            if ($baseType==='decimal' && $value!=='' && (!is_numeric($value) || !is_finite((float)$value) || (float)$value<0 || (float)$value>9999999999.99)) { http_response_code(422); exit('Invalid amount'); }
             if (str_starts_with($baseType,'select:') && $value!=='' && !in_array($value,explode(',',substr($baseType,7)),true)) { http_response_code(422); exit('Invalid choice'); }
             if ($type==='datetime-local') {
                 $date=DateTimeImmutable::createFromFormat('!Y-m-d\\TH:i',$value);
@@ -41,6 +43,15 @@ function platformAdmin(string $resource,string $method): void {
                 $value=$date->format('Y-m-d H:i:s');
             }
             $values[]=$optional && $value===''?null:$value;
+        }
+        if (isset($fields['facility_id'])) {
+            $facility=(int)$values[array_search('facility_id',array_keys($fields),true)];
+            if ($module!==null) checkModuleFacility($module,$facility);
+            else {
+                $active=db()->prepare('SELECT id FROM facilities WHERE id=? AND active=1');
+                $active->bind_param('i',$facility); $active->execute();
+                if (!$active->get_result()->fetch_row()) { http_response_code(422); exit('Select an active facility'); }
+            }
         }
         if ($resource==='donations') {
             $kind=$values[2];
@@ -64,7 +75,7 @@ function platformAdmin(string $resource,string $method): void {
             if (!$id || $id<1) { http_response_code(422); exit('Invalid facility'); }
             $stmt=db()->prepare('UPDATE facilities SET name=?,timezone=?,address=? WHERE id=?');
             $stmt->bind_param('sssi',$values[0],$values[1],$values[2],$id);
-            $stmt->execute();
+            auditedExecute($stmt,'facility_updated','facility',$id);
             header('Location: /admin/platform/facilities',true,303); exit;
         }
         $columns=implode(',',array_keys($fields));
@@ -72,24 +83,27 @@ function platformAdmin(string $resource,string $method): void {
         $stmt=db()->prepare("INSERT INTO `$table` ($columns) VALUES ($placeholders)");
         $types=str_repeat('s',count($values));
         $stmt->bind_param($types,...$values);
-        try { $stmt->execute(); }
+        $database=db(); $database->begin_transaction();
+        try { $stmt->execute(); $created=$database->insert_id; workflowAudit('resource_created',$resource,(int)$created); $database->commit(); }
         catch (mysqli_sql_exception $e) {
+            $database->rollback();
             if (in_array((int)$e->getCode(),[1452,1062],true)) {
                 http_response_code(422);
                 view('Unable to save','<p>The selected related record does not exist, or this entry already exists. <a href="/admin/platform/'.escape($resource).'">Return to the form</a>.</p>');
                 return;
             }
-            throw $e;
+            error_log('Platform resource save failed'); http_response_code(500); exit('Unable to save. No changes were saved.');
         }
         header('Location: /admin/platform/'.$resource,true,303); exit;
     }
     if ($method!=='GET') { http_response_code(405); return; }
     $html='<p><a href="/">Dashboard</a></p><table><thead><tr><th>ID</th>';
     foreach (array_keys($fields) as $field) $html.='<th>'.escape($field==='room_id'?'Room':ucwords(str_replace('_',' ',$field))).'</th>';
+    if ($resource==='donations') $html.='<th>Acknowledgment</th>';
     $html.='</tr></thead><tbody>';
     $rows=db()->query($resource==='beds'
         ? 'SELECT b.*,r.name AS room_name,f.name AS facility_name FROM beds b JOIN rooms r ON r.id=b.room_id JOIN facilities f ON f.id=r.facility_id ORDER BY b.id DESC LIMIT 100'
-        : "SELECT * FROM `$table` ORDER BY id DESC LIMIT 100");
+        : ($module!==null ? "SELECT t.* FROM `$table` t WHERE ".moduleFacilityScope($module,'t.facility_id')." ORDER BY t.id DESC LIMIT 100" : "SELECT * FROM `$table` ORDER BY id DESC LIMIT 100"));
     while ($row=$rows->fetch_assoc()) {
         $html.='<tr><td>'.(int)$row['id'].'</td>';
         foreach (array_keys($fields) as $field) {
@@ -98,6 +112,7 @@ function platformAdmin(string $resource,string $method): void {
                 : (string)($row[$field]??'');
             $html.='<td>'.escape((string)$display).'</td>';
         }
+        if ($resource==='donations') $html.='<td><a href="/donations/'.(int)$row['id'].'/receipt">Acknowledgment and reconciliation</a></td>';
         $html.='</tr>';
     }
     $html.='</tbody></table>';
@@ -133,7 +148,7 @@ function platformAdmin(string $resource,string $method): void {
             $relatedTable=$field==='facility_id'?'facilities':'rooms';
             $relatedRows=db()->query($field==='room_id'
                 ? 'SELECT r.id, r.name, f.name AS facility_name FROM rooms r JOIN facilities f ON f.id=r.facility_id WHERE r.active=1 AND f.active=1 ORDER BY f.name,r.name,r.id'
-                : 'SELECT id, name FROM facilities WHERE active=1 ORDER BY name,id');
+                : ($module!==null ? 'SELECT f.id,f.name FROM facilities f WHERE f.active=1 AND '.moduleFacilityScope($module).' ORDER BY f.name,f.id' : 'SELECT id,name FROM facilities WHERE active=1 ORDER BY name,id'));
             $html.='<label>'.$label.'<select name="'.escape($field).'" required><option value="">Select '.escape($relatedTable).'</option>';
             while ($related=$relatedRows->fetch_assoc()) {
                 $display=isset($related['facility_name'])?$related['facility_name'].' — '.$related['name']:$related['name'];

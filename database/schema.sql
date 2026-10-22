@@ -307,3 +307,84 @@ CREATE TABLE incident_facility_access (
     FOREIGN KEY(user_id) REFERENCES users(id) ON DELETE CASCADE,
     FOREIGN KEY(facility_id) REFERENCES facilities(id) ON DELETE CASCADE
 );
+
+-- ===== 020_facility_module_permissions.sql =====
+CREATE TABLE staff_facility_permissions (
+ user_id BIGINT UNSIGNED NOT NULL,
+ facility_id BIGINT UNSIGNED NOT NULL,
+ module ENUM('operations','kitchen','finance','volunteers','casework') NOT NULL,
+ PRIMARY KEY(user_id,facility_id,module),
+ FOREIGN KEY(user_id) REFERENCES users(id) ON DELETE CASCADE,
+ FOREIGN KEY(facility_id) REFERENCES facilities(id) ON DELETE CASCADE
+);
+
+-- ===== 021_platform_workflows.sql =====
+-- Existing case-note authors must identify valid employees before this FK is added.
+ALTER TABLE case_notes MODIFY author_id BIGINT UNSIGNED NOT NULL,
+ ADD CONSTRAINT case_notes_author_fk FOREIGN KEY(author_id) REFERENCES users(id);
+ALTER TABLE resident_appointments
+ ADD COLUMN title VARCHAR(160) NOT NULL DEFAULT 'Appointment',
+ ADD COLUMN location VARCHAR(160) NOT NULL DEFAULT '',
+ ADD COLUMN status ENUM('scheduled','completed','cancelled') NOT NULL DEFAULT 'scheduled',
+ ADD COLUMN created_by BIGINT UNSIGNED NULL,
+ ADD CONSTRAINT appointments_created_by_fk FOREIGN KEY(created_by) REFERENCES users(id);
+CREATE TABLE inventory_movements (
+ id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+ inventory_id BIGINT UNSIGNED NOT NULL,
+ quantity_change DECIMAL(12,2) NOT NULL,
+ reason VARCHAR(255) NOT NULL,
+ recorded_by BIGINT UNSIGNED NOT NULL,
+ created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+ FOREIGN KEY(inventory_id) REFERENCES kitchen_inventory(id),
+ FOREIGN KEY(recorded_by) REFERENCES users(id)
+);
+CREATE TABLE volunteer_shift_details (
+ shift_id BIGINT UNSIGNED PRIMARY KEY,
+ status ENUM('scheduled','completed','cancelled') NOT NULL DEFAULT 'scheduled',
+ approved_by BIGINT UNSIGNED NULL,
+ FOREIGN KEY(shift_id) REFERENCES volunteer_shifts(id),
+ FOREIGN KEY(approved_by) REFERENCES users(id)
+);
+CREATE TABLE public_site_settings (
+ id TINYINT UNSIGNED PRIMARY KEY,
+ site_name VARCHAR(160) NOT NULL DEFAULT 'Shelter',
+ introduction TEXT NOT NULL,
+ services TEXT NOT NULL,
+ contact_text TEXT NOT NULL,
+ updated_by BIGINT UNSIGNED NULL,
+ FOREIGN KEY(updated_by) REFERENCES users(id)
+);
+INSERT INTO public_site_settings(id,site_name,introduction,services,contact_text)
+ VALUES(1,'Shelter','Welcome to our shelter.','Contact our team for current services and availability.','Please contact the shelter directly for assistance.');
+
+-- ===== 022_casework_finance.sql =====
+CREATE TABLE donation_reconciliations (
+ donation_id BIGINT UNSIGNED PRIMARY KEY,
+ reference VARCHAR(120) NOT NULL,
+ reconciled_by BIGINT UNSIGNED NOT NULL,
+ reconciled_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+ FOREIGN KEY(donation_id) REFERENCES donations(id),
+ FOREIGN KEY(reconciled_by) REFERENCES users(id)
+);
+CREATE TABLE resident_case_profiles (
+ resident_id BIGINT UNSIGNED PRIMARY KEY,
+ caseworker_id BIGINT UNSIGNED NULL,
+ emergency_contact VARCHAR(500) NOT NULL DEFAULT '',
+ consent_note VARCHAR(1000) NOT NULL DEFAULT '',
+ updated_by BIGINT UNSIGNED NOT NULL,
+ FOREIGN KEY(resident_id) REFERENCES residents(id),
+ FOREIGN KEY(caseworker_id) REFERENCES users(id),
+ FOREIGN KEY(updated_by) REFERENCES users(id)
+);
+CREATE TABLE case_referrals (
+ id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+ resident_id BIGINT UNSIGNED NOT NULL,
+ service VARCHAR(160) NOT NULL,
+ provider VARCHAR(160) NOT NULL,
+ status ENUM('pending','in_progress','completed','cancelled') NOT NULL DEFAULT 'pending',
+ notes VARCHAR(1000) NOT NULL DEFAULT '',
+ created_by BIGINT UNSIGNED NOT NULL,
+ created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+ FOREIGN KEY(resident_id) REFERENCES residents(id),
+ FOREIGN KEY(created_by) REFERENCES users(id)
+);

@@ -25,7 +25,7 @@ def run():
         temp = Path(directory)
         data, app = temp / "data", temp / "app"
         app.mkdir()
-        for name in ("app", "bootstrap", "public", "vendor"):
+        for name in ("app", "bootstrap", "public", "vendor", "scripts"):
             shutil.copytree(ROOT / name, app / name)
         (app / ".env").write_text("")
         sock = str(temp / "db.sock")
@@ -138,10 +138,13 @@ def run():
                     runpy.run_path(str(ROOT / "tests/occupancy_constraints.py"))["run_tests"](sql, ROOT, sock, temp)
                     runpy.run_path(str(ROOT / "tests/facility_access.py"))["run_tests"](sql, request, csrf, check, password_hash)
                     runpy.run_path(str(ROOT / "tests/incident_access.py"))["run_tests"](sql, request, csrf, check, password_hash, ROOT)
+                    runpy.run_path(str(ROOT / "tests/platform_workflows.py"))["run_tests"](sql, request, csrf, check, password_hash, ROOT)
+                    runpy.run_path(str(ROOT / "tests/backup_restore.py"))["run_tests"](sql, app, sock, temp, env, check)
                     import sys, runpy
                     if "--browser" in sys.argv:
                         browser_test = runpy.run_path(str(ROOT / "tests/browser_residents.py"))["run_browser"]
                         for browser_name in ("chromium", "firefox"):
+                            runpy.run_path(str(ROOT / "tests/browser_platform.py"))["run_browser"](base, sql, browser_name)
                             browser_test(base, sql, browser_name)
                             runpy.run_path(str(ROOT / "tests/browser_incidents.py"))["run_browser"](base, sql, browser_name)
                     print("PASS: isolated HTTP/MariaDB integration checks (checkout, returning residents, history, search, authorization, CSRF).")

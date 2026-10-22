@@ -23,6 +23,14 @@ function residentManagement(string $method): void {
         $database=db();
         $database->begin_transaction();
         try {
+            $lock=$database->prepare('SELECT id FROM facilities WHERE id=? FOR UPDATE');
+            $lock->bind_param('i',$facility); $lock->execute(); $lock->get_result()->fetch_row();
+            $duplicates=$database->prepare('SELECT id FROM residents WHERE facility_id=? AND LOWER(TRIM(display_name))=LOWER(?) LIMIT 1');
+            $duplicates->bind_param('is',$facility,$name); $duplicates->execute();
+            if ($duplicates->get_result()->fetch_row() && ($_POST['distinct_person']??'')!=='1') {
+                $database->rollback(); http_response_code(409);
+                view('Check existing resident','<p>A resident with this name already exists. Search the resident records before creating another. If this is a different person, confirm that on the registration form.</p><a href="/admin/residents">Return to residents</a>'); return;
+            }
             $code='TMP-'.bin2hex(random_bytes(16));
             $stmt=$database->prepare('INSERT INTO residents(facility_id,reference_code,display_name) VALUES(?,?,?)');
             $stmt->bind_param('iss',$facility,$code,$name);
@@ -44,13 +52,17 @@ function residentManagement(string $method): void {
         header('Location: /admin/residents',true,303); exit;
     }
     if ($method!=='GET') { http_response_code(405); exit('Method not allowed'); }
-    $html='<p>Use fictional residents for testing. <a href="/admin/occupancy">Manage check-in and check-out</a></p><table><tr><th>Facility</th><th>Reference</th><th>Resident</th><th>Status</th><th>Current bed</th></tr>';
-    $rows=db()->query("SELECT r.*,f.name AS facility_name,CASE WHEN rm.facility_id=r.facility_id THEN b.code END AS bed_code,b.position,CASE WHEN rm.facility_id=r.facility_id THEN rm.name END AS room_name FROM residents r JOIN facilities f ON f.id=r.facility_id LEFT JOIN stays s ON s.resident_id=r.id AND s.checked_out_at IS NULL LEFT JOIN beds b ON b.id=s.bed_id LEFT JOIN rooms rm ON rm.id=b.room_id WHERE ".$residentScope." ORDER BY r.id DESC LIMIT 100");
-    while ($r=$rows->fetch_assoc()) $html.='<tr><td>'.escape($r['facility_name']).'</td><td>'.escape($r['reference_code']).'</td><td>'.'<a href="/admin/residents/'.(int)$r['id'].'/history">'.escape($r['display_name']).'</a></td><td>'.($r['bed_code']===null?'Checked out':'Currently staying').'</td><td>'.($r['bed_code']===null?'Not checked in':escape($r['room_name'].' / '.$r['bed_code'].' ('.$r['position'].')')).'</td></tr>';
+    $query=$_GET['q']??'';
+    if (!is_string($query) || strlen($query)>100) { http_response_code(422); exit('Invalid search'); }
+    $like='%'.str_replace(['!','%','_'],['!!','!%','!_'],trim($query)).'%';
+    $html='<form method="get"><label>Find an existing resident by name or reference<input name="q" maxlength="100" value="'.escape($query).'"></label><button>Search resident records</button></form><p>Use fictional residents for testing. <a href="/admin/occupancy">Manage check-in and check-out</a></p><table><tr><th>Facility</th><th>Reference</th><th>Resident</th><th>Status</th><th>Current bed</th></tr>';
+    $stmt=db()->prepare("SELECT r.*,f.name AS facility_name,CASE WHEN rm.facility_id=r.facility_id THEN b.code END AS bed_code,b.position,CASE WHEN rm.facility_id=r.facility_id THEN rm.name END AS room_name FROM residents r JOIN facilities f ON f.id=r.facility_id LEFT JOIN stays s ON s.resident_id=r.id AND s.checked_out_at IS NULL LEFT JOIN beds b ON b.id=s.bed_id LEFT JOIN rooms rm ON rm.id=b.room_id WHERE ".$residentScope." AND (r.display_name LIKE ? ESCAPE '!' OR r.reference_code LIKE ? ESCAPE '!') ORDER BY r.id DESC LIMIT 100");
+    $stmt->bind_param('ss',$like,$like); $stmt->execute(); $rows=$stmt->get_result();
+    while ($r=$rows->fetch_assoc()) $html.='<tr><td>'.escape($r['facility_name']).'</td><td>'.escape($r['reference_code']).'</td><td>'.'<a href="/admin/residents/'.(int)$r['id'].'/history">'.escape($r['display_name']).'</a> · <a href="/admin/residents/'.(int)$r['id'].'/edit">Update intake</a></td><td>'.($r['bed_code']===null?'Checked out':'Currently staying').'</td><td>'.($r['bed_code']===null?'Not checked in':escape($r['room_name'].' / '.$r['bed_code'].' ('.$r['position'].')')).'</td></tr>';
     $html.='</table><h2>Register resident</h2><form method="post"><input type="hidden" name="_csrf" value="'.csrf().'"><label>Facility<select name="facility_id" required><option value="">Select facility</option>';
     $facilities=db()->query('SELECT f.id,f.name FROM facilities f WHERE f.active=1 AND '.$facilityScope.' ORDER BY f.name');
     while ($f=$facilities->fetch_assoc()) $html.='<option value="'.(int)$f['id'].'">'.escape($f['name']).'</option>';
-    $html.='</select></label><p>The reference code is generated automatically when you register the resident.</p><label>Display name<input name="display_name" maxlength="160" required></label><button>Register resident</button></form>';
+    $html.='</select></label><p>The reference code is generated automatically when you register the resident.</p><label>Display name<input name="display_name" maxlength="160" required></label><label><input type="checkbox" name="distinct_person" value="1"> I checked existing records; this is a different person with the same name.</label><button>Register resident</button></form>';
     view('Residents',$html);
 }
 
