@@ -16,9 +16,9 @@ Updated: 2026-10-22. Keep this PR draft and separate from PR #6.
 
 ## Remaining before ready
 
-- Browser acceptance for password changes, administrator resets, and recovery.
+- [x] Chromium and Firefox acceptance passed for administrator resets, expiry/reuse, session revocation, self-service changes, public recovery, and mobile form width.
 - Verify actual configured mail transport and delivery, HTTPS, secure cookies, reset URL logging controls, and audit retention.
-- Confirm the new GitHub Actions lint and integration checks pass on the final commit.
+- Confirm GitHub Actions pass on the latest browser-test commit.
 - Independent security review, including recovery timing and abuse controls.
 - Reconcile PR #6 authentication/routes, migrations, consolidated schema, and tests in a separate integration change.
 

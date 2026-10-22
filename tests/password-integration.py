@@ -221,6 +221,11 @@ def run():
                     config_code = "require 'app/ForgotPassword.php'; putenv('APP_URL=http://insecure.invalid'); echo passwordResetEmailConfigured() ? 'yes' : 'no';"
                     check(php(config_code)=="no", "Non-HTTPS recovery origin rejected")
                     check(php("try { issuePasswordResetToken(2,'employee@example.invalid'); echo 'bad'; } catch (DomainException $e) { echo 'safe'; }")=="safe", "Changed recovery address rejected")
+                    import sys, runpy
+                    if "--browser" in sys.argv:
+                        browser_test = runpy.run_path(str(ROOT / "tests/browser_password.py"))["run_browser"]
+                        for browser_name in ("chromium", "firefox"):
+                            browser_test(base, capture, sql, password_hash, browser_name)
                     print("PASS: isolated password/reset/session/permission/CSRF/rate-limit/audit/concurrency tests; mail captured locally.")
             finally:
                 for process in (server, db):
