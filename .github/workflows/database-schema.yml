@@ -1,0 +1,53 @@
+name: Database schema smoke test
+on:
+  push:
+  pull_request:
+
+jobs:
+  schema:
+    runs-on: ubuntu-latest
+    services:
+      mariadb:
+        image: mariadb:11.4
+        env:
+          MARIADB_ROOT_PASSWORD: test-root-password
+          MARIADB_DATABASE: shelter_management
+          MARIADB_USER: shelter_app
+          MARIADB_PASSWORD: test-password
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd="healthcheck.sh --connect --innodb_initialized"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=12
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install MariaDB client
+        run: sudo apt-get update && sudo apt-get install -y mariadb-client
+      - name: Import consolidated schema
+        env:
+          MYSQL_PWD: test-password
+        run: mariadb --host=127.0.0.1 --port=3306 --user=shelter_app shelter_management < database/schema.sql
+      - name: Verify current schema
+        env:
+          MYSQL_PWD: test-password
+        run: |
+          test "$(mariadb --batch --skip-column-names --host=127.0.0.1 --user=shelter_app shelter_management -e 'SELECT COUNT(*) FROM information_schema.tables WHERE table_schema=DATABASE()')" = "40"
+          mariadb --host=127.0.0.1 --user=shelter_app shelter_management -e "
+            SELECT audience FROM kitchen_meals LIMIT 0;
+            SELECT id FROM daytime_access_exceptions LIMIT 0;
+            SELECT id FROM daytime_food_distributions LIMIT 0;
+            SELECT facility_id FROM facility_schedules LIMIT 0;
+            SELECT user_id,facility_id FROM resident_facility_access LIMIT 0;
+            SELECT user_id,facility_id FROM incident_facility_access LIMIT 0;
+            SELECT facility_id FROM incidents LIMIT 0;
+            SELECT user_id,module FROM staff_facility_permissions LIMIT 0;
+            SELECT status,created_by FROM resident_appointments LIMIT 0;
+            SELECT inventory_id FROM inventory_movements LIMIT 0;
+            SELECT caseworker_id FROM resident_case_profiles LIMIT 0;
+            SELECT donation_id FROM donation_reconciliations LIMIT 0;
+            SELECT site_name FROM public_site_settings LIMIT 0;
+            SELECT parent_chore_id,next_chore_id FROM chore_successors LIMIT 0;
+            SELECT configured,enabled,from_address FROM app_email_settings LIMIT 0;
+          "

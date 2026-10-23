@@ -1,4 +1,4 @@
-name: PHP lint
+name: PHP lint and resident integration
 on:
   push:
   pull_request:
@@ -11,5 +11,17 @@ jobs:
         uses: shivammathur/setup-php@v2
         with:
           php-version: '8.4'
+          extensions: mysqli, mbstring
       - name: Lint PHP
         run: find app bootstrap public scripts -type f -name '*.php' -print0 | xargs -0 -r -n1 php -l
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Test asynchronous resident search
+        run: node tests/resident-search.cjs
+      - name: Install MariaDB test tools
+        run: sudo apt-get update && sudo apt-get install -y mariadb-server mariadb-client
+      - name: Generate autoloader
+        run: composer dump-autoload --no-interaction --no-scripts
+      - name: Test resident workflows in a disposable database
+        run: python3 tests/integration.py

@@ -9,8 +9,13 @@ foreach (file(dirname(__DIR__) . '/.env', FILE_IGNORE_NEW_LINES | FILE_SKIP_EMPT
 ini_set('session.use_strict_mode', '1');
 ini_set('session.cookie_httponly', '1');
 ini_set('session.cookie_samesite', 'Lax');
-if (getenv('SESSION_SECURE') === 'true') ini_set('session.cookie_secure', '1');
+if (getenv('SESSION_SECURE') === 'true' || (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS']!=='off')) ini_set('session.cookie_secure', '1');
 session_start();
+header('X-Content-Type-Options: nosniff');
+header('X-Frame-Options: DENY');
+header('Referrer-Policy: no-referrer');
+header("Content-Security-Policy: default-src 'self'; script-src 'self'; script-src-attr 'none'; style-src 'self'; object-src 'none'; base-uri 'none'; frame-ancestors 'none'; form-action 'self'");
+
 function db(): mysqli {
     static $db = null;
     if ($db === null) {
@@ -21,7 +26,23 @@ function db(): mysqli {
 }
 function escape(string $value): string { return htmlspecialchars($value, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8'); }
 function csrf(): string { return $_SESSION['csrf'] ??= bin2hex(random_bytes(32)); }
-function requireAuth(): void { if (empty($_SESSION['user_id'])) { header('Location: /login'); exit; } }
+function requireAuth(): void {
+    if (empty($_SESSION['user_id'])) { header('Location: /login'); exit; }
+    $now=time();
+    if ((isset($_SESSION['last_activity']) && $now-(int)$_SESSION['last_activity']>1800) || (isset($_SESSION['signed_in_at']) && $now-(int)$_SESSION['signed_in_at']>43200)) {
+        $_SESSION=[]; session_regenerate_id(true); header('Location: /login'); exit;
+    }
+    $_SESSION['signed_in_at']??=$now; $_SESSION['last_activity']=$now;
+    $id=(int)$_SESSION['user_id'];
+    $stmt=db()->prepare('SELECT active FROM users WHERE id=? LIMIT 1');
+    $stmt->bind_param('i',$id); $stmt->execute();
+    $user=$stmt->get_result()->fetch_assoc();
+    if (!$user || !(int)$user['active']) {
+        $_SESSION=[];
+        session_regenerate_id(true);
+        header('Location: /login'); exit;
+    }
+}
 function can(string $permission): bool {
     if (empty($_SESSION['user_id'])) return false;
     $stmt=db()->prepare('SELECT 1 FROM user_roles ur JOIN role_permissions rp ON rp.role_id=ur.role_id JOIN permissions p ON p.id=rp.permission_id WHERE ur.user_id=? AND p.name=? LIMIT 1');

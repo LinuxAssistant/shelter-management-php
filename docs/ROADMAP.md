@@ -34,4 +34,8 @@ Each module uses a feature branch and a focused PR. Add schema migrations, test 
 ## Existing work
 
 - PRs #1–#3 established authentication, incident reports/notes, employee profiles and employee management.
-- PR #4 (`feature/password-management`) is a **draft** covering self-service password changes only. Password resets, email delivery, throttling, audit events and global session invalidation remain future work.
+- PR #4 (`feature/password-management`) remains a separate draft and includes password changes, email-based reset, throttling, security audit events and session revocation. Both drafts are combined only in the separately tested local integration build and fictional Docker preview.
+
+## Current complete-platform build
+
+Resident intake/lookup/updates, occupancy/history, incident reporting/review, private profiles/notes/referrals/appointments, operational schedules/chores (including recurrence), volunteers/shifts/approvals, kitchen stock/movements/meals, finance/acknowledgments/reconciliation/exports, scoped reports, audit viewing, roles/module assignments, and public pages are implemented. A private backup and isolated restoration check are included. See docs/platform-operator-guide.md for the actual deployment status and setup requirements. Reservations, waiting lists, automated retention/deletion, advanced monitoring and organization-specific extensions remain follow-on work rather than claims of this core release.
