@@ -2,21 +2,22 @@
 declare(strict_types=1);
 
 function passwordResetEmailConfigured(): bool {
+    $settings=resetMailSettings();
     $base=(string)(getenv('APP_URL')?:'');
     $parts=parse_url($base);
-    return getenv('PASSWORD_RESET_EMAIL_ENABLED')==='true'
+    return $settings['enabled']
         && filter_var($base,FILTER_VALIDATE_URL)!==false
         && $parts!==false && ($parts['scheme']??'')==='https'
         && !isset($parts['user']) && !isset($parts['pass'])
         && !isset($parts['query']) && !isset($parts['fragment'])
-        && filter_var((string)getenv('MAIL_FROM'),FILTER_VALIDATE_EMAIL)!==false;
+        && filter_var($settings['from'],FILTER_VALIDATE_EMAIL)!==false;
 }
 
 /** Send only when explicitly configured for an HTTPS public origin. */
 function sendPasswordResetEmail(string $email,string $token): bool {
     if (!passwordResetEmailConfigured()) return false;
     $base=rtrim((string)getenv('APP_URL'),'/');
-    $from=(string)getenv('MAIL_FROM');
+    $from=resetMailSettings()['from'];
     $url=$base.'/reset-password?token='.rawurlencode($token);
     $subject='Shelter Management password reset';
     $body="A password reset was requested for your account.\n\nOpen this link within 30 minutes:\n".$url."\n\nIf you did not request this, ignore this message.\n";

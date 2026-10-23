@@ -221,6 +221,24 @@ def run():
                     config_code = "require 'app/ForgotPassword.php'; putenv('APP_URL=http://insecure.invalid'); echo passwordResetEmailConfigured() ? 'yes' : 'no';"
                     check(php(config_code)=="no", "Non-HTTPS recovery origin rejected")
                     check(php("try { issuePasswordResetToken(2,'employee@example.invalid'); echo 'bad'; } catch (DomainException $e) { echo 'safe'; }")=="safe", "Changed recovery address rejected")
+                    reset_rates()
+                    check(login(employee,"updated","fictional-race-password")[0]==200,"Login for mail settings permission check")
+                    check(request(employee,"/admin/email")[0]==403,"Mail settings require administrator")
+                    check(request(admin,"/admin/email",{"_csrf":"invalid","enabled":"1","from_address":"configured@example.invalid"})[0]==419,"Mail settings CSRF")
+                    check(post(admin,"/admin/email",{"enabled":"1","from_address":""})[0]==422,"Sender required")
+                    capture.unlink(missing_ok=True)
+                    check(post(admin,"/admin/email",{"enabled":"1","from_address":"configured@example.invalid"})[0]==200,"Sender configurable")
+                    check(not capture.exists(),"Saving settings sends no message")
+                    forgot("updated@example.invalid")
+                    check(capture.exists() and "From: configured@example.invalid" in capture.read_text(),"Configured sender used by local mail capture")
+                    reset_rates()
+                    check(post(admin,"/admin/email",{"from_address":"configured@example.invalid"})[0]==200,"Reset email disable configurable")
+                    capture.unlink(missing_ok=True)
+                    before=sql("USE shelter_test; SELECT COUNT(*) FROM password_reset_tokens;").strip()
+                    forgot("updated@example.invalid")
+                    check(not capture.exists() and sql("USE shelter_test; SELECT COUNT(*) FROM password_reset_tokens;").strip()==before,"Disabled mail issues no new token or message")
+                    sql("USE shelter_test; UPDATE app_email_settings SET configured=0,enabled=0,from_address='' WHERE id=1;")
+                    reset_rates()
                     import sys, runpy
                     if "--browser" in sys.argv:
                         browser_test = runpy.run_path(str(ROOT / "tests/browser_password.py"))["run_browser"]

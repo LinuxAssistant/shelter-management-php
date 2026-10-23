@@ -10,7 +10,9 @@ require dirname(__DIR__) . '/app/ForgotPassword.php';
 require dirname(__DIR__) . '/app/AdminPasswordReset.php';
 $path = parse_url($_SERVER['REQUEST_URI'] ?? '/', PHP_URL_PATH);
 $method = $_SERVER['REQUEST_METHOD'] ?? 'GET';
-if ($path === '/forgot-password' && $method === 'GET') {
+if ($path === '/admin/email') {
+    emailSettingsPage($method);
+} elseif ($path === '/forgot-password' && $method === 'GET') {
     forgotPasswordForm();
 } elseif ($path === '/forgot-password' && $method === 'POST') {
     forgotPasswordSubmit();
