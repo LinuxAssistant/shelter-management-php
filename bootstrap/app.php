@@ -1,6 +1,8 @@
 <?php
 declare(strict_types=1);
 require dirname(__DIR__) . '/vendor/autoload.php';
+require dirname(__DIR__) . '/app/PasswordSecurity.php';
+require_once dirname(__DIR__) . '/app/EmailSettings.php';
 foreach (file(dirname(__DIR__) . '/.env', FILE_IGNORE_NEW_LINES | FILE_SKIP_EMPTY_LINES) ?: [] as $line) {
     if (str_starts_with(trim($line), '#') || !str_contains($line, '=')) continue;
     [$key,$value] = explode('=', $line, 2);
@@ -21,9 +23,18 @@ function db(): mysqli {
 }
 function escape(string $value): string { return htmlspecialchars($value, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8'); }
 function csrf(): string { return $_SESSION['csrf'] ??= bin2hex(random_bytes(32)); }
-function requireAuth(): void { if (empty($_SESSION['user_id'])) { header('Location: /login'); exit; } }
+function requireAuth(): void {
+    if (empty($_SESSION['user_id']) || !isset($_SESSION['session_version'])) { header('Location: /login'); exit; }
+    $id=(int)$_SESSION['user_id'];
+    $stmt=db()->prepare('SELECT active,session_version FROM users WHERE id=?');
+    $stmt->bind_param('i',$id); $stmt->execute(); $row=$stmt->get_result()->fetch_assoc();
+    if (!$row || !(int)$row['active'] || (int)$row['session_version'] !== (int)$_SESSION['session_version']) {
+        $_SESSION=[]; session_destroy(); header('Location: /login'); exit;
+    }
+}
 function can(string $permission): bool {
     if (empty($_SESSION['user_id'])) return false;
+    requireAuth();
     $stmt=db()->prepare('SELECT 1 FROM user_roles ur JOIN role_permissions rp ON rp.role_id=ur.role_id JOIN permissions p ON p.id=rp.permission_id WHERE ur.user_id=? AND p.name=? LIMIT 1');
     $stmt->bind_param('is', $_SESSION['user_id'], $permission); $stmt->execute();
     return (bool)$stmt->get_result()->fetch_row();

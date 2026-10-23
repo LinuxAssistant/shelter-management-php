@@ -2,21 +2,43 @@
 declare(strict_types=1);
 require dirname(__DIR__) . '/bootstrap/app.php';
 require dirname(__DIR__) . '/app/EmployeeManagement.php';
+require dirname(__DIR__) . '/app/PasswordManagement.php';
+require dirname(__DIR__) . '/app/PasswordResetTokens.php';
+require dirname(__DIR__) . '/app/PasswordResetPages.php';
+require dirname(__DIR__) . '/app/AuthRateLimit.php';
+require dirname(__DIR__) . '/app/ForgotPassword.php';
+require dirname(__DIR__) . '/app/AdminPasswordReset.php';
 $path = parse_url($_SERVER['REQUEST_URI'] ?? '/', PHP_URL_PATH);
 $method = $_SERVER['REQUEST_METHOD'] ?? 'GET';
-if ($path === '/login' && $method === 'GET') {
-    view('Employee login','<form method="post"><input type="hidden" name="_csrf" value="'.csrf().'"><label>Email or badge number <input name="identifier" required autocomplete="username"></label><label>Password <input type="password" name="password" required autocomplete="current-password"></label><button>Sign in</button></form>');
+if ($path === '/admin/email') {
+    emailSettingsPage($method);
+} elseif ($path === '/forgot-password' && $method === 'GET') {
+    forgotPasswordForm();
+} elseif ($path === '/forgot-password' && $method === 'POST') {
+    forgotPasswordSubmit();
+} elseif ($path === '/reset-password' && $method === 'GET') {
+    passwordResetForm();
+} elseif ($path === '/reset-password' && $method === 'POST') {
+    passwordResetSubmit();
+} elseif ($path === '/login' && $method === 'GET') {
+    view('Employee login','<form method="post"><input type="hidden" name="_csrf" value="'.csrf().'"><label>Email or badge number <input name="identifier" required autocomplete="username"></label><label>Password <input type="password" name="password" required autocomplete="current-password"></label><button>Sign in</button></form><p><a href="/forgot-password">Forgot password?</a></p>');
 } elseif ($path === '/login' && $method === 'POST') {
     verifyCsrf();
     $identifier=trim((string)($_POST['identifier'] ?? '')); $password=(string)($_POST['password'] ?? '');
-    $stmt=db()->prepare('SELECT id,password_hash FROM users WHERE (email=? OR badge_number=?) AND active=1 LIMIT 1');
+    $ip=(string)($_SERVER['REMOTE_ADDR']??'unknown');
+    if (!authRateHit('login-ip',$ip,30) || !authRateHit('login-id',$identifier,5)) { http_response_code(429); header('Retry-After: 900'); view('Too many attempts','<p>Please wait 15 minutes before trying again.</p>'); exit; }
+    $stmt=db()->prepare('SELECT id,password_hash,session_version FROM users WHERE (email=? OR badge_number=?) AND active=1 LIMIT 1');
     $stmt->bind_param('ss',$identifier,$identifier); $stmt->execute(); $user=$stmt->get_result()->fetch_assoc();
-    if ($user && password_verify($password,$user['password_hash'])) { session_regenerate_id(true); $_SESSION['user_id']=(int)$user['id']; header('Location: /'); exit; }
+    if ($user && password_verify($password,$user['password_hash'])) { authRateClear('login-id',$identifier); session_regenerate_id(true); $_SESSION['user_id']=(int)$user['id']; $_SESSION['session_version']=(int)$user['session_version']; header('Location: /'); exit; }
     http_response_code(401); view('Login failed','<p>Invalid credentials.</p><a href="/login">Try again</a>');
 } elseif ($path === '/logout' && $method === 'POST') {
     requireAuth(); verifyCsrf(); $_SESSION=[]; session_destroy(); header('Location: /login'); exit;
 } elseif ($path === '/' && $method === 'GET') {
-    requireAuth(); view('Staff dashboard','<p>Welcome to Shelter Management.</p><p><a href="/incidents">View incident reports</a></p>'.(can('admin.manage')?'<p><a href="/admin/employees">Manage employees</a></p>':''));
+    requireAuth(); view('Staff dashboard','<p>Welcome to Shelter Management.</p><p><a href="/incidents">View incident reports</a></p><p><a href="/account/password">Change my password</a></p>'.(can('admin.manage')?'<p><a href="/admin/employees">Manage employees</a></p>':''));
+} elseif ($path === '/account/password' && $method === 'GET') {
+    passwordChangeForm();
+} elseif ($path === '/account/password' && $method === 'POST') {
+    passwordChangeSave();
 } elseif ($path === '/incidents' && $method === 'GET') {
     requirePermission('incidents.view'); $rows=db()->query('SELECT id,category,severity,status,occurred_at FROM incidents ORDER BY occurred_at DESC LIMIT 100'); $html='<p><a href="/incidents/new">New incident</a></p><table><tr><th>ID</th><th>Category</th><th>Severity</th><th>Status</th><th>When</th></tr>';
     while($row=$rows->fetch_assoc()) $html.='<tr><td><a href="/incidents/'.(int)$row['id'].'">#'.(int)$row['id'].'</a></td><td>'.escape($row['category']).'</td><td>'.escape($row['severity']).'</td><td>'.escape($row['status']).'</td><td>'.escape($row['occurred_at']).'</td></tr>';
@@ -69,6 +91,10 @@ if ($path === '/login' && $method === 'GET') {
     $stmt->execute(); header('Location: /incidents/'.$id,true,303); exit;
 } elseif ($path === '/admin/employees' && $method === 'GET') {
     employeePage();
+} elseif (preg_match('~^/admin/employees/([1-9][0-9]*)/reset-password$~D',(string)$path,$resetMatch)) {
+    requirePermission('admin.manage');
+    if ($method!=='POST') { header('Allow: POST'); http_response_code(405); exit('Method not allowed'); }
+    adminResetPassword((int)$resetMatch[1]);
 } elseif ($path === '/admin/employees/new' && $method === 'GET') {
     employeeForm(null);
 } elseif ($path === '/admin/employees' && $method === 'POST') {
