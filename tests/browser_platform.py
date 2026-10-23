@@ -17,10 +17,12 @@ def run_browser(base,sql,browser_name):
             expect(page.get_by_role("heading",name="Staff dashboard",exact=True)).to_be_visible()
             for label in ("Residents","Safety","Case management","Daily operations","Kitchen","Donations and finances","Volunteers","Administration"):
                 expect(page.get_by_role("heading",name=label,exact=True)).to_be_visible()
+            page.evaluate("const probe=document.createElement('script');probe.textContent='window.inlineProbe=true';document.body.append(probe)")
+            assert page.evaluate("window.inlineProbe") is None,"CSP blocks untrusted inline scripts"
             evidence=Path.home()/"shelter-browser-evidence"/"pr6"; evidence.mkdir(parents=True,exist_ok=True)
             page.screenshot(path=str(evidence/(browser_name+"-platform-dashboard.png")),full_page=True)
             routes=["/cases/400","/volunteer-shifts","/inventory","/reports","/admin/audit","/admin/public-site",
-                    "/admin/chores","/admin/schedules","/admin/programs","/admin/daytime-exceptions","/admin/daytime-food",
+                    "/admin/email","/admin/platform/facilities","/admin/chores","/admin/schedules","/admin/programs","/admin/daytime-exceptions","/admin/daytime-food",
                     "/admin/platform/volunteers","/admin/platform/donations","/admin/platform/expenses",
                     "/admin/platform/kitchen-inventory","/admin/platform/kitchen-meals","/admin/platform/kitchen-temperatures","/admin/platform/kitchen-waste",
                     "/admin/employees/20/module-facilities","/admin/employees/20/roles","/admin/residents/400/edit","/admin/platform/volunteers?edit=400","/admin/platform/kitchen-inventory?edit=400"]

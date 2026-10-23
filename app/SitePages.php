@@ -75,7 +75,7 @@ function staffDashboard(): void {
     if (canUseModule('kitchen')) $groups['Kitchen']=['/inventory'=>'Stock and movements','/admin/platform/kitchen-meals'=>'Meals','/admin/platform/kitchen-temperatures'=>'Temperature logs','/admin/platform/kitchen-waste'=>'Waste','/reports'=>'Meal reports'];
     if (canUseModule('finance')) $groups['Donations and finances']=['/admin/platform/donations'=>'Donations','/admin/platform/expenses'=>'Expenses','/reports'=>'Financial reports'];
     if (canUseModule('volunteers')) $groups['Volunteers']=['/admin/platform/volunteers'=>'Volunteer records','/volunteer-shifts'=>'Shifts and approved hours','/reports'=>'Volunteer reports'];
-    if (can('admin.manage')) $groups['Administration']=['/admin/employees'=>'Employees and access','/admin/platform/facilities'=>'Facilities','/admin/platform/rooms'=>'Rooms','/admin/platform/beds'=>'Beds','/admin/public-site'=>'Public website','/admin/audit'=>'Audit trail'];
+    if (can('admin.manage')) $groups['Administration']=['/admin/employees'=>'Employees and access','/admin/platform/facilities'=>'Facilities','/admin/platform/rooms'=>'Rooms','/admin/platform/beds'=>'Beds','/admin/email'=>'Email settings','/admin/public-site'=>'Public website','/admin/audit'=>'Audit trail'];
     foreach($groups as $title=>$links) { $html.='<section><h2>'.escape($title).'</h2><ul>'; foreach($links as $url=>$label) $html.='<li><a href="'.$url.'">'.escape($label).'</a></li>'; $html.='</ul></section>'; }
     if (!$groups) $html.='<p>No facility access has been assigned. Contact your administrator.</p>';
     view('Staff dashboard',$html.'</div>');

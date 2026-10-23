@@ -89,6 +89,10 @@ def run():
                     check(response.url.endswith("/login"), "Anonymous API access must require login")
                     _, body, _ = request("/login")
                     check(request("/login", {"_csrf":csrf(body), "identifier":"test@example.invalid", "password":"fictional-test-password"})[0] == 200, "Login")
+                    _, _, security_response = request("/login")
+                    policy = security_response.headers["Content-Security-Policy"]
+                    check("unsafe-inline" not in policy and "script-src-attr 'none'" in policy, "Inline scripts and handlers blocked")
+                    check(security_response.headers["Referrer-Policy"] == "no-referrer", "Reset link referrers suppressed")
                     def search(q):
                         status, body, response = request("/api/residents/search?q=" + urllib.parse.quote(q))
                         check(status == 200 and response.headers["Cache-Control"] == "no-store", "Search response")

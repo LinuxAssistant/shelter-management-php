@@ -164,6 +164,16 @@ def run_tests(sql,request,csrf,check,password_hash,root):
     check(request("/incidents/100/status",{"_csrf":csrf(body),"status":"Resolved"},reviewer)[0]==200,"Assigned incident reviewer resolves report")
     check(request("/incidents/101/status",{"_csrf":csrf(body),"status":"Resolved"},reviewer)[0]==422,"Reviewer cannot resolve foreign report")
     check(query("SELECT status FROM incidents WHERE id=101;")=="Open","Foreign review leaves report unchanged")
+    # Administrator-configured mail identity and enablement; no messages are sent here.
+    path="/admin/email"
+    check(get(path,ops)[0]==403 and request(path,{"enabled":"1","from_address":"sender@example.invalid"},ops)[0]==403,"Email settings require administrator")
+    check(request(path,{"_csrf":"invalid","enabled":"1","from_address":"sender@example.invalid"})[0]==419,"Email settings require CSRF")
+    check(post(path,{"enabled":"1","from_address":""})[0]==422,"Enabled mail requires sender")
+    check(post(path,{"enabled":"1","from_address":"sender@example.invalid"+chr(13)+chr(10)+"Bcc: injected@example.invalid"})[0]==422,"Mail header injection rejected")
+    check(post(path,{"enabled":"1","from_address":"sender@example.invalid"})[0]==200,"Administrator configures sender")
+    check(query("SELECT CONCAT(configured,':',enabled,':',from_address) FROM app_email_settings WHERE id=1;")=="1:1:sender@example.invalid","Settings saved")
+    check(post(path,{"from_address":"sender@example.invalid"})[0]==200,"Administrator disables reset mail")
+    check(query("SELECT enabled FROM app_email_settings WHERE id=1;")=="0","Disabled setting persisted")
     # Forward upgrades retain old appointments and case notes.
     old=(root/"database/schema.sql").read_text().split("-- ===== 020_facility_module_permissions.sql =====")[0]
     sql("CREATE DATABASE platform_upgrade_test; USE platform_upgrade_test;\n"+old)
@@ -172,7 +182,7 @@ def run_tests(sql,request,csrf,check,password_hash,root):
         "INSERT INTO residents(id,facility_id,reference_code,display_name) VALUES(1,1,'UPGRADE-1','Upgrade resident');"
         "INSERT INTO case_notes(resident_id,author_id,body) VALUES(1,1,'Preserved note');"
         "INSERT INTO resident_appointments(facility_id,resident_id,appointment_type,starts_at,ends_at) VALUES(1,1,'other','2026-10-24 10:00','2026-10-24 11:00');")
-    for filename in ("020_facility_module_permissions.sql","021_platform_workflows.sql","022_casework_finance.sql","023_recurring_chores.sql"):
+    for filename in ("020_facility_module_permissions.sql","021_platform_workflows.sql","022_casework_finance.sql","023_recurring_chores.sql","024_email_settings.sql"):
         sql("USE platform_upgrade_test;\n"+(root/"database/migrations"/filename).read_text())
     check(sql("USE platform_upgrade_test; SELECT title FROM resident_appointments;").strip()=="Appointment","Legacy appointments preserved")
     check(sql("USE platform_upgrade_test; SELECT body FROM case_notes;").strip()=="Preserved note","Legacy case notes preserved")

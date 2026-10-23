@@ -8,6 +8,7 @@ require dirname(__DIR__) . '/app/Workflows.php';
 require dirname(__DIR__) . '/app/SitePages.php';
 require dirname(__DIR__) . '/app/Administration.php';
 require dirname(__DIR__) . '/app/Finance.php';
+require_once dirname(__DIR__) . '/app/EmailSettings.php';
 require dirname(__DIR__) . '/app/IncidentAccess.php';
 require dirname(__DIR__) . '/app/IncidentFacilityAttribution.php';
 require dirname(__DIR__) . '/app/IncidentFacilityAssignments.php';
@@ -29,6 +30,8 @@ if (preg_match('~^/donations/([1-9][0-9]*)/receipt$~D',(string)$path,$receiptMat
     financeExport($method,$exportMatch[1]);
 } elseif (in_array($path,['/welcome','/services','/contact'],true)) {
     publicSitePage($method,$path==='/welcome'?'home':substr($path,1));
+} elseif ($path === '/admin/email') {
+    emailSettingsPage($method);
 } elseif ($path === '/admin/public-site') {
     publicSettingsPage($method);
 } elseif ($path === '/reports') {

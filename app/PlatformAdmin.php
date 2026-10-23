@@ -199,7 +199,7 @@ function platformAdmin(string $resource,string $method): void {
         $html.='</select></label><label>Name<input name="name" id="facility-name" maxlength="160" required></label><label>Timezone<select name="timezone" id="facility-timezone" required>';
         foreach (DateTimeZone::listIdentifiers() as $zone) $html.='<option value="'.escape($zone).'">'.escape($zone).'</option>';
         $html.='</select></label><label>Address<input name="address" id="facility-address" maxlength="255" required></label><button>Save changes</button></form>';
-        $html.='<script>const facilityData='.json_encode($facilityOptions,JSON_HEX_TAG|JSON_HEX_AMP|JSON_HEX_APOS|JSON_HEX_QUOT).';const facilitySelect=document.getElementById("edit-facility");function loadFacility(){const f=facilityData.find(x=>String(x.id)===facilitySelect.value);if(!f)return;document.getElementById("facility-name").value=f.name;document.getElementById("facility-timezone").value=f.timezone;document.getElementById("facility-address").value=f.address;}facilitySelect.addEventListener("change",loadFacility);loadFacility();</script>';
+        $html.='<script type="application/json" id="facility-data">'.json_encode($facilityOptions,JSON_HEX_TAG|JSON_HEX_AMP|JSON_HEX_APOS|JSON_HEX_QUOT).'</script><script src="/assets/facility-settings.js" defer></script>';
     }
     $html.='<h2>Add '.escape(ucfirst($resource)).'</h2><form method="post"><input type="hidden" name="_csrf" value="'.csrf().'">';
     foreach ($fields as $field=>$type) {
