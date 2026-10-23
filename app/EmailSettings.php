@@ -26,9 +26,14 @@ function emailSettingsPage(string $method): void {
             else passwordAudit('mail_settings_updated',$actor,null);
             $database->commit();
         } catch(Throwable $error) { $database->rollback(); http_response_code(500); exit('Unable to save email settings. No changes were saved.'); }
+        $_SESSION['email_settings_saved']=true;
         header('Location: /admin/email',true,303); exit;
     }
     $settings=resetMailSettings();
-    $html='<p>Password-reset messages use the mail service configured on this server. Saving these settings does not verify delivery or configure an SMTP relay. No test message is sent automatically.</p><form method="post"><input type="hidden" name="_csrf" value="'.csrf().'"><label>Sender email address<input type="email" name="from_address" maxlength="255" value="'.escape($settings['from']).'" autocomplete="email"></label><label><input type="checkbox" name="enabled" value="1" '.($settings['enabled']?'checked':'').'> Enable password-reset email</label><button>Save email settings</button></form><p>The reset-link address comes from the server’s APP_URL setting and must use HTTPS. Keep email disabled until the server has a valid sending domain and working delivery configuration.</p>';
+    $saved=!empty($_SESSION['email_settings_saved']);
+    unset($_SESSION['email_settings_saved']);
+    $html=($saved?'<p role="status"><strong>Email settings saved.</strong></p>':'');
+    $html.='<p>Password-reset email is currently <strong>'.($settings['enabled']?'enabled':'disabled').'</strong>.</p>';
+    $html.='<p>Password-reset messages use the mail service configured on this server. Saving these settings does not verify delivery or configure an SMTP relay. No test message is sent automatically.</p><form method="post"><input type="hidden" name="_csrf" value="'.csrf().'"><label>Sender email address<input type="email" name="from_address" maxlength="255" value="'.escape($settings['from']).'" autocomplete="email"></label><label><input type="checkbox" name="enabled" value="1" '.($settings['enabled']?'checked':'').'> Enable password-reset email</label><button>Save email settings</button></form><p>The reset-link address comes from the server’s APP_URL setting and must use HTTPS. Keep email disabled until the server has a valid sending domain and working delivery configuration.</p>';
     view('Email settings',$html);
 }
